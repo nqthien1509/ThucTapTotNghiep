@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "391609449711",
+    "project_id": "thuctaptotnghiep-426d2",
+    "storage_bucket": "thuctaptotnghiep-426d2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:391609449711:android:1d4e67398c2342eb10ef1a",
+        "android_client_info": {
+          "package_name": "com.example.thuctaptotnghiep"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDbCmslW2C07VM7Oxpjni0DqocllpXDpeo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
