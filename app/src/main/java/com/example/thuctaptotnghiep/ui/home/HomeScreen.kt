@@ -1,5 +1,6 @@
 package com.example.thuctaptotnghiep.ui.home
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,103 +11,100 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.thuctaptotnghiep.data.model.Document
+import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
 
 @Composable
 fun HomeScreen(
+    viewModel: HomeViewModel = viewModel(),
     onNavigateToUpload: () -> Unit,
     onDocumentClick: (String) -> Unit,
     onProfileClick: () -> Unit,
-    onSearchClick: () -> Unit // THÊM: Nhận sự kiện bấm Tìm kiếm
+    onSearchClick: () -> Unit
 ) {
+    val context = LocalContext.current
+
+    val documentList by viewModel.documents.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let {
+            Toast.makeText(context, "Lỗi: $it", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     Scaffold(
         bottomBar = {
             AppBottomNavigationBar(
+                onHomeClick = { /* Đang ở Home */ },
                 onUploadClick = onNavigateToUpload,
                 onProfileClick = onProfileClick,
-                onSearchClick = onSearchClick // Truyền xuống Bottom Bar
+                onSearchClick = onSearchClick
             )
         },
         containerColor = Color(0xFFF5F5F5)
     ) { paddingValues ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+            modifier = Modifier.fillMaxSize().padding(paddingValues)
         ) {
-            item { HeaderSection(onSearchClick = onSearchClick) } // Truyền vào Header
-            item {
-                DocumentSection(
-                    title = "Mới được tải lên",
-                    items = listOf("Giáo trình Mạng máy tính", "Slide An toàn bảo mật", "Đề cương Triết học"),
-                    onItemClick = onDocumentClick
-                )
-            }
-            item {
-                DocumentSection(
-                    title = "Tài liệu ôn thi",
-                    items = listOf("Đề thi Toán cao cấp 2024", "Giải bài tập Vật lý 1", "Tổng hợp trắc nghiệm"),
-                    onItemClick = onDocumentClick
-                )
-            }
-            item {
-                DocumentSection(
-                    title = "Tin nổi bật",
-                    items = listOf("Cẩm nang bảo vệ đồ án", "Kỹ năng phỏng vấn IT", "Hướng dẫn viết CV"),
-                    onItemClick = onDocumentClick
-                )
+            // ĐÃ CẬP NHẬT: Truyền đúng tên từ Firebase vào Header
+            item { HeaderSection(userName = viewModel.userName, onSearchClick = onSearchClick) }
+
+            if (isLoading) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Color(0xFF4C9EEB))
+                    }
+                }
+            } else {
+                item { DocumentSection(title = "Mới được tải lên", items = documentList, onItemClick = onDocumentClick) }
+                item { DocumentSection(title = "Tài liệu ôn thi", items = documentList.shuffled(), onItemClick = onDocumentClick) }
+                item { DocumentSection(title = "Tin nổi bật", items = documentList, onItemClick = onDocumentClick) }
             }
             item { Spacer(modifier = Modifier.height(20.dp)) }
         }
     }
 }
 
-// 1. Phần Header màu xanh
+// ---------------------------------------------------------------------------
+
 @Composable
-fun HeaderSection(onSearchClick: () -> Unit) { // Nhận sự kiện click
+fun HeaderSection(userName: String, onSearchClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                color = Color(0xFF4C9EEB),
-                shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp)
-            )
+            .background(color = Color(0xFF4C9EEB), shape = RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(50.dp)
-                    .clip(CircleShape)
-                    .background(Color.LightGray),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = Modifier.size(50.dp).clip(CircleShape).background(Color.LightGray), contentAlignment = Alignment.Center) {
                 Icon(Icons.Default.Person, contentDescription = "Avatar", tint = Color.White)
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text("Xin chào,", color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                Text("Thien", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                // ĐÃ SỬA: Hiển thị biến userName thay vì chữ "Thien"
+                Text(userName, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Box giả lập thanh TextField để bấm vào sẽ chuyển trang thay vì bật bàn phím
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .background(Color.White, RoundedCornerShape(26.dp))
-                .clip(RoundedCornerShape(26.dp))
-                .clickable { onSearchClick() } // Bấm vào đây sẽ gọi lệnh chuyển trang
-                .padding(horizontal = 16.dp),
+                .fillMaxWidth().height(52.dp).background(Color.White, RoundedCornerShape(26.dp)).clip(RoundedCornerShape(26.dp))
+                .clickable { onSearchClick() }.padding(horizontal = 16.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -119,141 +117,46 @@ fun HeaderSection(onSearchClick: () -> Unit) { // Nhận sự kiện click
     }
 }
 
-// 2. Nhóm danh sách cuộn ngang
 @Composable
-fun DocumentSection(title: String, items: List<String>, onItemClick: (String) -> Unit) {
+fun DocumentSection(title: String, items: List<Document>, onItemClick: (String) -> Unit) {
     Column(modifier = Modifier.padding(top = 20.dp)) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically
         ) {
             Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
             Text("Xem tất cả", color = Color(0xFF4C9EEB), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
         }
         Spacer(modifier = Modifier.height(12.dp))
 
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(items.size) { index ->
-                DocumentCardPreview(
-                    title = items[index],
-                    onClick = { onItemClick(items[index]) }
-                )
+        if (items.isEmpty()) {
+            Text("Chưa có tài liệu nào.", color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp))
+        } else {
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                items(items.size) { index ->
+                    DocumentCardPreview(document = items[index], onClick = { onItemClick(items[index].id) })
+                }
             }
         }
     }
 }
 
-// 3. Thẻ tài liệu hoàn chỉnh
 @Composable
-fun DocumentCardPreview(title: String, onClick: () -> Unit) {
+fun DocumentCardPreview(document: Document, onClick: () -> Unit) {
     Card(
-        modifier = Modifier
-            .width(140.dp)
-            .height(200.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        modifier = Modifier.width(140.dp).height(200.dp).clickable { onClick() },
+        shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(110.dp)
-                    .background(Color(0xFFE3F2FD)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Star, contentDescription = "Cover", tint = Color(0xFF4C9EEB), modifier = Modifier.size(40.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(110.dp).background(Color(0xFFE3F2FD)), contentAlignment = Alignment.Center) {
+                // Hiển thị chữ cái đầu tiên của sách làm ảnh bìa tạm
+                Text(text = document.title.take(1).uppercase(), fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4C9EEB))
             }
             Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Text(text = document.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "PDF • Miễn phí",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray
-                )
+                Text(text = document.size, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
             }
         }
-    }
-}
-
-// 4. Nút nổi Upload
-@Composable
-fun UploadButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    FloatingActionButton(
-        onClick = onClick,
-        shape = CircleShape,
-        containerColor = Color(0xFF4C9EEB),
-        contentColor = Color.White,
-        modifier = modifier.size(60.dp),
-        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-    ) {
-        Icon(Icons.Default.Add, contentDescription = "Upload", modifier = Modifier.size(32.dp))
-    }
-}
-
-// 5. Thanh điều hướng dưới đáy
-@Composable
-fun AppBottomNavigationBar(
-    onUploadClick: () -> Unit,
-    onProfileClick: () -> Unit,
-    onSearchClick: () -> Unit // THÊM: Tham số click Tìm kiếm
-) {
-    Box(
-        modifier = Modifier.fillMaxWidth(),
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        NavigationBar(
-            containerColor = Color.White,
-            contentColor = Color.Gray,
-            tonalElevation = 8.dp,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            NavigationBarItem(
-                icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                selected = true,
-                colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFF4C9EEB), unselectedIconColor = Color.Gray, indicatorColor = Color.White),
-                onClick = {}
-            )
-            NavigationBarItem(
-                icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-                selected = false,
-                colors = NavigationBarItemDefaults.colors(unselectedIconColor = Color.Gray),
-                onClick = onSearchClick // Gắn lệnh vào icon Kính lúp
-            )
-
-            Spacer(modifier = Modifier.weight(1.5f))
-
-            NavigationBarItem(
-                icon = { Icon(Icons.Default.Notifications, contentDescription = "Notifications") },
-                selected = false,
-                colors = NavigationBarItemDefaults.colors(unselectedIconColor = Color.Gray),
-                onClick = {}
-            )
-            NavigationBarItem(
-                icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
-                selected = false,
-                colors = NavigationBarItemDefaults.colors(unselectedIconColor = Color.Gray),
-                onClick = onProfileClick
-            )
-        }
-
-        UploadButton(
-            onClick = onUploadClick,
-            modifier = Modifier.offset(y = (-30).dp)
-        )
     }
 }

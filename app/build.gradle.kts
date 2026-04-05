@@ -46,7 +46,7 @@ android {
 }
 
 dependencies {
-    // Các thư viện hệ thống (Giữ nguyên libs.xxx của bạn)
+    // Các thư viện hệ thống
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -58,13 +58,14 @@ dependencies {
 
     // Hilt: Quản lý Dependency Injection
     implementation(libs.hilt.android)
+    // Đã xóa dòng firebase.perf.ktx gây lỗi tại đây
     ksp(libs.hilt.compiler)
 
     // Retrofit: Gọi API
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
 
-    // Firebase: Auth và Cloud Messaging
+    // Firebase: Auth và Cloud Messaging (Sử dụng BOM quản lý version)
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-messaging-ktx")
@@ -72,12 +73,16 @@ dependencies {
     // Coil: Hiển thị hình ảnh
     implementation("io.coil-kt:coil-compose:2.6.0")
 
+    // Navigation & Icons & Compose Hilt
+    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    implementation("androidx.navigation:navigation-compose:2.7.7")
-    implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
-    implementation("com.google.firebase:firebase-auth-ktx:22.3.1")
+
+    // Thư viện đọc file PDF trong Jetpack Compose
+    implementation("io.github.grizzi91:bouquet:1.1.2")
 }

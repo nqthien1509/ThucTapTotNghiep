@@ -1,6 +1,11 @@
 package com.example.thuctaptotnghiep.ui.detail
 
-import androidx.compose.foundation.Canvas
+import android.app.DownloadManager
+import android.content.Context
+import android.net.Uri
+import android.os.Environment
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,207 +15,233 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar // Import thanh Bottom Bar
+import androidx.lifecycle.viewmodel.compose.viewModel // Import MVVM
+import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
+import com.rizzi.bouquet.ResourceType
+import com.rizzi.bouquet.VerticalPDFReader
+import com.rizzi.bouquet.rememberVerticalPdfReaderState
+
+
 
 @Composable
 fun DocumentDetailScreen(
-    documentTitle: String,
+    documentId: String,
+    viewModel: DetailViewModel = viewModel(), // <-- TIÊM VIEWMODEL VÀO ĐÂY
     onBackClick: () -> Unit,
-    // THÊM CÁC THAM SỐ CHUYỂN TRANG CHO BOTTOM BAR
     onHomeClick: () -> Unit,
     onUploadClick: () -> Unit,
     onProfileClick: () -> Unit,
     onSearchClick: () -> Unit
 ) {
-    Scaffold(
-        containerColor = Color.White,
-        bottomBar = {
-            AppBottomNavigationBar(
-                onHomeClick = onHomeClick,
-                onUploadClick = onUploadClick,
-                onProfileClick = onProfileClick,
-                onSearchClick = onSearchClick
-            )
+    val context = LocalContext.current
+
+    // "LẮNG NGHE" DỮ LIỆU TỪ VIEWMODEL
+    val document by viewModel.document.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+
+    // Biến trạng thái để mở giao diện xem PDF toàn màn hình
+    var isPreviewOpen by remember { mutableStateOf(false) }
+
+    // Tự động lấy dữ liệu khi ID thay đổi
+    LaunchedEffect(documentId) {
+        if (documentId.isNotEmpty()) {
+            viewModel.fetchDocumentDetail(documentId)
         }
-    ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+    }
 
-            // 1. Nền lượn sóng màu xanh
-            Canvas(modifier = Modifier.fillMaxWidth().height(260.dp).align(Alignment.TopCenter)) {
-                val path = Path().apply {
-                    lineTo(0f, size.height - 80f)
-                    quadraticBezierTo(size.width * 0.5f, size.height, size.width, size.height - 80f)
-                    lineTo(size.width, 0f)
-                    close()
-                }
-                drawPath(path, Color(0xFF6FB1F0))
-            }
+    // Hiển thị thông báo nếu có lỗi từ Server
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let {
+            Toast.makeText(context, "Lỗi: $it", Toast.LENGTH_SHORT).show()
+        }
+    }
 
-            // Toàn bộ nội dung cuộn được
-            Column(
+    // Xử lý nút Back của điện thoại: Nếu đang mở PDF thì đóng PDF lại, chứ không thoát hẳn ra ngoài
+    BackHandler(enabled = isPreviewOpen) {
+        isPreviewOpen = false
+    }
+
+    // =====================================================================
+    // GIAO DIỆN XEM TRƯỚC PDF (FULL SCREEN)
+    // =====================================================================
+    if (isPreviewOpen && document != null) {
+        val fullUrl = "http://10.0.2.2:3000${document!!.fileUrl}"
+
+        // Khởi tạo bộ nhớ cho thư viện đọc PDF
+        val pdfState = rememberVerticalPdfReaderState(
+            resource = ResourceType.Remote(fullUrl),
+            isZoomEnable = true
+        )
+
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            // Màn hình lật trang PDF
+            VerticalPDFReader(
+                state = pdfState,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Thanh công cụ phía trên (Nút Đóng)
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .padding(top = 40.dp, bottom = 12.dp, start = 16.dp, end = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Top Bar (Nút Back và Nút 3 chấm nằm trong vòng tròn trắng)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp, start = 16.dp, end = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier.size(44.dp).background(Color.White, CircleShape).clickable { onBackClick() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại")
-                    }
-                    Text("Chi tiết tài liệu", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-                    Box(
-                        modifier = Modifier.size(44.dp).background(Color.White, CircleShape).clickable { /* TODO: Menu */ },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.MoreHoriz, contentDescription = "Thêm")
-                    }
+                IconButton(onClick = { isPreviewOpen = false }) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                 }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = document!!.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+        }
+    }
+    // =====================================================================
+    // GIAO DIỆN CHI TIẾT TÀI LIỆU BÌNH THƯỜNG
+    // =====================================================================
+    else {
+        Scaffold(
+            bottomBar = {
+                AppBottomNavigationBar(onHomeClick, onUploadClick, onProfileClick, onSearchClick)
+            },
+            containerColor = Color(0xFFF5F5F5)
+        ) { paddingValues ->
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
 
-                Spacer(modifier = Modifier.height(20.dp))
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = Color(0xFF4C9EEB))
+                } else if (document != null) {
+                    val doc = document!!
 
-                // Khu vực ảnh bìa đè lên khung xám
-                Box(modifier = Modifier.fillMaxWidth()) {
-
-                    // Khung xám nhạt bo tròn góc trên
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 110.dp) // Đẩy khung xám xuống nửa chiều cao ảnh bìa
-                            .background(Color(0xFFEEEEEE), RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-                            .padding(horizontal = 24.dp)
-                    ) {
-                        Spacer(modifier = Modifier.height(130.dp)) // Nhường chỗ cho nửa dưới ảnh bìa
-
-                        // Người đăng
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                        // Header Ảnh bìa và nút Back
+                        Box(modifier = Modifier.fillMaxWidth().height(260.dp).background(Color(0xFFE3F2FD))) {
                             Box(
-                                modifier = Modifier.size(40.dp).background(Color.LightGray, CircleShape),
+                                modifier = Modifier.padding(top = 40.dp, start = 20.dp).size(44.dp)
+                                    .background(Color.White.copy(alpha = 0.8f), CircleShape).clip(CircleShape).clickable { onBackClick() },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Person, contentDescription = null, tint = Color.White)
+                                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.Black)
                             }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text("Người đăng", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Icon(Icons.Default.PictureAsPdf, contentDescription = "PDF Cover", tint = Color(0xFF4C9EEB), modifier = Modifier.size(100.dp).align(Alignment.Center))
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Khung trắng chứa Icon Đánh giá, Tải về, Lượt xem
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
-                                .background(Color.White, RoundedCornerShape(28.dp))
-                                .padding(horizontal = 32.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        // Phần Thông tin sách
+                        Column(
+                            modifier = Modifier.offset(y = (-20).dp).fillMaxWidth()
+                                .background(Color.White, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).padding(24.dp)
                         ) {
-                            Icon(Icons.Default.Star, contentDescription = "Đánh giá", tint = Color(0xFFFFC107), modifier = Modifier.size(28.dp))
-                            Icon(Icons.Default.Download, contentDescription = "Tải về", tint = Color.Black, modifier = Modifier.size(28.dp))
-                            Icon(Icons.Default.Visibility, contentDescription = "Lượt xem", tint = Color.Black, modifier = Modifier.size(28.dp))
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Nút Tải Về
-                        Button(
-                            onClick = { /* TODO: Xử lý tải PDF */ },
-                            modifier = Modifier.fillMaxWidth().height(56.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6FB1F0))
-                        ) {
-                            Text("Tải Về", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        }
-
-                        Spacer(modifier = Modifier.height(32.dp))
-
-                        // Các Section mô tả chi tiết
-                        DetailSection("Mô tả")
-                        Text(
-                            text = "Đây là tài liệu: $documentTitle. Nội dung bao gồm toàn bộ bài giảng và bài tập thực hành. Rất phù hợp cho việc ôn tập cuối kỳ.",
-                            color = Color.DarkGray,
-                            lineHeight = 22.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        DetailSection("Thông tin thêm")
-                        Text("Định dạng: PDF\nDung lượng: 2.5 MB\nNgôn ngữ: Tiếng Việt", color = Color.DarkGray, lineHeight = 22.sp)
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        DetailSection("Bình luận")
-
-                        // Khung viết bình luận
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 80.dp) // Thêm khoảng trống chống lẹm Bottom Bar
-                        ) {
-                            Box(
-                                modifier = Modifier.size(40.dp).background(Color.LightGray, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.Person, contentDescription = null, tint = Color.White)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                                Text(text = doc.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.Gray, modifier = Modifier.padding(start = 16.dp).clickable { /* TODO */ })
                             }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp)
-                                    .background(Color.White, RoundedCornerShape(24.dp))
-                                    .padding(horizontal = 16.dp),
-                                contentAlignment = Alignment.CenterStart
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF4C9EEB)), contentAlignment = Alignment.Center) {
+                                    Text(doc.authorName.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Đăng bởi: ${doc.authorName}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("Cập nhật: ${doc.uploadDate.take(10)}", fontSize = 12.sp, color = Color.Gray)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(24.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp)).padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceAround
                             ) {
-                                Text("Viết bình luận của bạn", color = Color.Gray, fontSize = 14.sp)
+                                InfoItem("Dung lượng", doc.size)
+                                InfoItem("Lượt xem", "${doc.views}")
+                                InfoItem("Lượt tải", "${doc.downloads}")
+                            }
+
+                            Spacer(modifier = Modifier.height(32.dp))
+
+                            // ==========================================
+                            // NÚT XEM TRƯỚC VÀ NÚT TẢI VỀ
+                            // ==========================================
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                // Nút Xem trước
+                                Button(
+                                    onClick = { isPreviewOpen = true },
+                                    modifier = Modifier.weight(1f).height(56.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4C9EEB))
+                                ) {
+                                    Icon(Icons.Default.Visibility, contentDescription = null, tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("XEM TRƯỚC", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                // Nút Tải về
+                                Button(
+                                    onClick = { downloadDocument(context, doc.fileUrl, doc.title) },
+                                    modifier = Modifier.weight(1f).height(56.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF286090))
+                                ) {
+                                    Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("TẢI VỀ", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
-
-                    // Hình ảnh bìa sách nổi lên trên
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .width(160.dp)
-                            .height(220.dp)
-                            .background(Color(0xFFE0E0E0), RoundedCornerShape(16.dp))
-                            .clip(RoundedCornerShape(16.dp))
-                    )
+                } else {
+                    Text("Không tìm thấy dữ liệu", modifier = Modifier.align(Alignment.Center))
                 }
             }
         }
     }
 }
 
-// Widget vẽ đường kẻ ngang và Tiêu đề mục (Giống Figma)
 @Composable
-fun DetailSection(title: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-        HorizontalDivider(modifier = Modifier.width(16.dp), color = Color.Gray)
-        Text(title, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp), fontSize = 16.sp)
-        HorizontalDivider(modifier = Modifier.weight(1f), color = Color.Gray)
+fun InfoItem(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = label, fontSize = 12.sp, color = Color.Gray)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(text = value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+    }
+}
+
+// Hàm tải xuống giữ nguyên
+fun downloadDocument(context: Context, fileUrl: String, title: String) {
+    try {
+        val fullUrl = "http://10.0.2.2:3000$fileUrl"
+        val request = DownloadManager.Request(Uri.parse(fullUrl))
+            .setTitle(title)
+            .setDescription("Đang tải tài liệu từ ứng dụng...")
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "$title.pdf")
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(true)
+
+        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        downloadManager.enqueue(request)
+
+        Toast.makeText(context, "Bắt đầu tải xuống...", Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        Toast.makeText(context, "Lỗi khi tải: ${e.message}", Toast.LENGTH_SHORT).show()
     }
 }

@@ -59,8 +59,8 @@ fun AppNavigation() {
         composable("home") {
             HomeScreen(
                 onNavigateToUpload = { navController.navigate("upload") },
-                onDocumentClick = { title ->
-                    navController.navigate("document_detail/$title")
+                onDocumentClick = { id -> // Đã sửa thành id
+                    navController.navigate("document_detail/$id")
                 },
                 onProfileClick = {
                     navController.navigate("profile")
@@ -73,13 +73,13 @@ fun AppNavigation() {
 
         // 4. Màn hình Chi tiết tài liệu
         composable(
-            route = "document_detail/{title}",
-            arguments = listOf(navArgument("title") { type = NavType.StringType })
+            route = "document_detail/{id}", // Đã sửa thành id
+            arguments = listOf(navArgument("id") { type = NavType.StringType })
         ) { backStackEntry ->
-            val title = backStackEntry.arguments?.getString("title") ?: "Tài liệu không tên"
+            val documentId = backStackEntry.arguments?.getString("id") ?: "" // Lấy id từ URL
 
             DocumentDetailScreen(
-                documentTitle = title,
+                documentId = documentId, // Truyền đúng tên biến documentId
                 onBackClick = { navController.popBackStack() },
                 onHomeClick = {
                     navController.navigate("home") { popUpTo("home") { inclusive = true } }
@@ -90,7 +90,7 @@ fun AppNavigation() {
             )
         }
 
-        // 5. Màn hình Đăng tài liệu (Upload) - Đã thêm kết nối Bottom Bar
+        // 5. Màn hình Đăng tài liệu (Upload)
         composable("upload") {
             UploadScreen(
                 onBackClick = { navController.popBackStack() },
@@ -122,8 +122,8 @@ fun AppNavigation() {
         composable("search") {
             SearchScreen(
                 onBackClick = { navController.popBackStack() },
-                onDocumentClick = { title ->
-                    navController.navigate("document_detail/$title")
+                onDocumentClick = { id -> // Đã sửa thành id
+                    navController.navigate("document_detail/$id")
                 },
                 onHomeClick = {
                     navController.navigate("home") { popUpTo("home") { inclusive = true } }

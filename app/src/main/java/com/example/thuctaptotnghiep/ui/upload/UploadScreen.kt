@@ -3,6 +3,7 @@ package com.example.thuctaptotnghiep.ui.upload
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -27,7 +28,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.thuctaptotnghiep.network.RetrofitClient
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
+import com.google.firebase.auth.FirebaseAuth // ĐÃ THÊM IMPORT FIREBASE
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
+import java.io.FileOutputStream
 
 @Composable
 fun UploadScreen(
@@ -38,20 +50,18 @@ fun UploadScreen(
     onSearchClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope() // Để chạy tác vụ mạng dưới nền
 
-    // Biến lưu trữ tên file đã chọn
     var selectedFileName by remember { mutableStateOf<String?>(null) }
-    // Biến lưu trữ Uri của file để sau này upload lên Server
     var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
+    var isUploading by remember { mutableStateOf(false) } // Trạng thái đang tải
 
-    // Bộ phóng (Launcher) để mở trình quản lý tệp của hệ điều hành
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        // Khi người dùng chọn file xong, code này sẽ chạy
         uri?.let {
             selectedFileUri = it
-            selectedFileName = getFileName(context, it) // Gọi hàm lấy tên file
+            selectedFileName = getFileName(context, it)
         }
     }
 
@@ -60,7 +70,7 @@ fun UploadScreen(
         bottomBar = {
             AppBottomNavigationBar(
                 onHomeClick = onHomeClick,
-                onUploadClick = { /* Đang ở màn hình Upload rồi nên không làm gì */ },
+                onUploadClick = { },
                 onProfileClick = onProfileClick,
                 onSearchClick = onSearchClick
             )
@@ -68,7 +78,7 @@ fun UploadScreen(
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
 
-            // 1. Vẽ nền lượn sóng màu xanh dương nhạt (Header)
+            // Header nền sóng xanh
             Canvas(modifier = Modifier.fillMaxWidth().height(200.dp).align(Alignment.TopCenter)) {
                 val path = Path().apply {
                     lineTo(0f, size.height - 60f)
@@ -79,7 +89,7 @@ fun UploadScreen(
                 drawPath(path, Color(0xFF6FB1F0))
             }
 
-            // Nút Back tròn nền trắng
+            // Nút Back
             Box(
                 modifier = Modifier
                     .padding(top = 40.dp, start = 20.dp)
@@ -92,123 +102,110 @@ fun UploadScreen(
                 Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại", tint = Color.Black)
             }
 
-            // 2. Nội dung chính
+            // Nội dung chính
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 24.dp),
+                modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(modifier = Modifier.height(220.dp))
 
-                Text(
-                    text = "Upload tài liệu",
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color.Black
-                )
-
+                Text("Upload tài liệu", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
                 Spacer(modifier = Modifier.height(16.dp))
-
                 Text(
                     text = "Chia sẻ tài liệu của Bạn bằng cách\nUpload file để mọi người có thể\nxem, tải và kết nối cùng Bạn.",
-                    fontSize = 15.sp,
-                    color = Color.DarkGray,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 22.sp
+                    fontSize = 15.sp, color = Color.DarkGray, textAlign = TextAlign.Center, lineHeight = 22.sp
                 )
-
                 Spacer(modifier = Modifier.height(40.dp))
 
-                // 3. Khung Upload có tương tác thật
+                // Khung chọn file
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(200.dp)
                         .background(Color(0xFFEBE1E1), RoundedCornerShape(16.dp))
-                        .clickable {
-                            // Bấm vào Box này cũng mở trình chọn file (Lọc lấy file PDF)
-                            filePickerLauncher.launch("application/pdf")
-                        },
+                        .clickable { if (!isUploading) filePickerLauncher.launch("application/pdf") },
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(16.dp)
-                    ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
                         if (selectedFileName == null) {
-                            // TRẠNG THÁI 1: CHƯA CHỌN FILE
                             Button(
-                                onClick = {
-                                    // Bấm nút mở trình chọn file PDF
-                                    filePickerLauncher.launch("application/pdf")
-                                },
+                                onClick = { filePickerLauncher.launch("application/pdf") },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6FB1F0)),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.height(48.dp)
                             ) {
                                 Text("Chọn file", fontSize = 18.sp, color = Color.White)
                             }
-
                             Spacer(modifier = Modifier.height(16.dp))
-
-                            Text(
-                                text = "Kéo & thả tài liệu vào đây\nhoặc bấm để chọn",
-                                textAlign = TextAlign.Center,
-                                color = Color.DarkGray,
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp
-                            )
+                            Text("Kéo & thả tài liệu vào đây\nhoặc bấm để chọn", textAlign = TextAlign.Center, color = Color.DarkGray, fontSize = 14.sp)
                         } else {
-                            // TRẠNG THÁI 2: ĐÃ CHỌN FILE THÀNH CÔNG
-                            Icon(
-                                Icons.Default.InsertDriveFile,
-                                contentDescription = "File Icon",
-                                tint = Color(0xFF6FB1F0),
-                                modifier = Modifier.size(48.dp)
-                            )
-
+                            Icon(Icons.Default.InsertDriveFile, contentDescription = null, tint = Color(0xFF6FB1F0), modifier = Modifier.size(48.dp))
                             Spacer(modifier = Modifier.height(8.dp))
-
-                            Text(
-                                text = selectedFileName!!,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Black,
-                                fontSize = 16.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-
+                            Text(selectedFileName!!, fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Spacer(modifier = Modifier.height(16.dp))
-
-                            Button(
-                                onClick = {
-                                    // Hủy file đã chọn
-                                    selectedFileName = null
-                                    selectedFileUri = null
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252)), // Nút màu đỏ
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.height(40.dp)
-                            ) {
-                                Text("Chọn lại file khác", fontSize = 14.sp, color = Color.White)
+                            if (!isUploading) {
+                                Button(
+                                    onClick = { selectedFileName = null; selectedFileUri = null },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252)),
+                                    shape = RoundedCornerShape(12.dp), modifier = Modifier.height(40.dp)
+                                ) {
+                                    Text("Chọn lại file khác", fontSize = 14.sp, color = Color.White)
+                                }
                             }
                         }
                     }
                 }
 
-                // Nếu đã chọn file, hiện thêm nút TẢI LÊN màu xanh khổng lồ ở dưới
+                // Nút Tải lên và Loading logic
                 if (selectedFileName != null) {
                     Spacer(modifier = Modifier.height(32.dp))
                     Button(
                         onClick = {
-                            /* TODO: Gọi Backend đẩy file lên mạng */
+                            if (selectedFileUri != null) {
+                                isUploading = true
+                                coroutineScope.launch {
+                                    try {
+                                        val tempFile = uriToFile(context, selectedFileUri!!)
+                                        if (tempFile != null) {
+                                            val requestFile = tempFile.asRequestBody("application/pdf".toMediaTypeOrNull())
+                                            val body = MultipartBody.Part.createFormData("file", tempFile.name, requestFile)
+
+                                            // ĐÃ CẬP NHẬT: LẤY TÊN THẬT TỪ FIREBASE
+                                            val currentUser = FirebaseAuth.getInstance().currentUser
+                                            val actualAuthorName = currentUser?.displayName ?: "Người dùng ẩn danh"
+
+                                            val titlePart = (selectedFileName ?: "Tài liệu").toRequestBody("text/plain".toMediaTypeOrNull())
+                                            val authorPart = actualAuthorName.toRequestBody("text/plain".toMediaTypeOrNull()) // Truyền tên thật
+
+                                            val response = RetrofitClient.apiService.uploadDocument(body, titlePart, authorPart)
+
+                                            Toast.makeText(context, "Tải lên thành công rực rỡ!", Toast.LENGTH_SHORT).show()
+
+                                            selectedFileName = null
+                                            selectedFileUri = null
+                                        } else {
+                                            Toast.makeText(context, "Không thể đọc file", Toast.LENGTH_SHORT).show()
+                                        }
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Lỗi kết nối Server: ${e.message}", Toast.LENGTH_LONG).show()
+                                    } finally {
+                                        isUploading = false
+                                    }
+                                }
+                            }
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
+                        enabled = !isUploading,
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6FB1F0))
                     ) {
-                        Text("TẢI LÊN NGAY", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        if (isUploading) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("ĐANG TẢI LÊN...", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        } else {
+                            Text("TẢI LÊN NGAY", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
                     }
                 }
             }
@@ -216,7 +213,10 @@ fun UploadScreen(
     }
 }
 
-// Hàm hỗ trợ dịch đường dẫn nội bộ (Uri) của Android thành tên file hiển thị dễ đọc
+// -------------------------------------------------------------------
+// CÁC HÀM HỖ TRỢ XỬ LÝ FILE
+// -------------------------------------------------------------------
+
 fun getFileName(context: Context, uri: Uri): String? {
     var result: String? = null
     if (uri.scheme == "content") {
@@ -224,20 +224,32 @@ fun getFileName(context: Context, uri: Uri): String? {
         try {
             if (cursor != null && cursor.moveToFirst()) {
                 val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (index >= 0) {
-                    result = cursor.getString(index)
-                }
+                if (index >= 0) result = cursor.getString(index)
             }
-        } finally {
-            cursor?.close()
-        }
+        } finally { cursor?.close() }
     }
     if (result == null) {
         result = uri.path
         val cut = result?.lastIndexOf('/') ?: -1
-        if (cut != -1) {
-            result = result?.substring(cut + 1)
-        }
+        if (cut != -1) result = result?.substring(cut + 1)
     }
     return result
+}
+
+suspend fun uriToFile(context: Context, uri: Uri): File? = withContext(Dispatchers.IO) {
+    val contentResolver = context.contentResolver
+    val fileName = getFileName(context, uri) ?: "temp_pdf_file.pdf"
+    val tempFile = File(context.cacheDir, fileName)
+
+    try {
+        val inputStream = contentResolver.openInputStream(uri)
+        val outputStream = FileOutputStream(tempFile)
+        inputStream?.copyTo(outputStream)
+        inputStream?.close()
+        outputStream.close()
+        return@withContext tempFile
+    } catch (e: Exception) {
+        e.printStackTrace()
+        return@withContext null
+    }
 }

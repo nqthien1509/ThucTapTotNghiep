@@ -1,13 +1,15 @@
-package com.example.thuctaptotnghiep.data.model
+package com.example.thuctaptotnghiep.data.model // Giữ nguyên package cũ của bạn
 
+import com.google.gson.annotations.SerializedName
+
+// Cấu trúc mới khớp 100% với MongoDB Backend
 data class Document(
-    val id: String,
+    @SerializedName("_id") val id: String,
     val title: String,
-    val description: String,
-    val price: Double = 0.0,
-    val category: String,
-    val fileUrl: String?,
-    val thumbnail: String?,
-    val sellerId: String,
-    val status: String
+    val authorName: String,
+    val fileUrl: String,
+    val size: String,
+    val downloads: Int,
+    val views: Int,
+    val uploadDate: String
 )
