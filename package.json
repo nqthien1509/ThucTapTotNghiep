@@ -11,9 +11,11 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "amqplib": "^1.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.0",
     "express": "^5.2.1",
+    "firebase-admin": "^13.7.0",
     "mongoose": "^9.4.1",
     "multer": "^2.1.1"
   }
