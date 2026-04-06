@@ -20,11 +20,10 @@ import com.google.firebase.auth.FirebaseAuth
 fun AppNavigation() {
     val navController = rememberNavController()
 
-    // Kiểm tra xem đã có ai đăng nhập trên máy này chưa
+    // Kiểm tra trạng thái đăng nhập để chọn màn hình khởi đầu
     val currentUser = FirebaseAuth.getInstance().currentUser
     val startRoute = if (currentUser != null) "home" else "login"
 
-    // NavHost là nơi chứa các màn hình
     NavHost(navController = navController, startDestination = startRoute) {
 
         // 1. Màn hình Đăng nhập
@@ -59,7 +58,7 @@ fun AppNavigation() {
         composable("home") {
             HomeScreen(
                 onNavigateToUpload = { navController.navigate("upload") },
-                onDocumentClick = { id -> // Đã sửa thành id
+                onDocumentClick = { id ->
                     navController.navigate("document_detail/$id")
                 },
                 onProfileClick = {
@@ -71,15 +70,15 @@ fun AppNavigation() {
             )
         }
 
-        // 4. Màn hình Chi tiết tài liệu
+        // 4. Màn hình Chi tiết tài liệu (Có truyền ID)
         composable(
-            route = "document_detail/{id}", // Đã sửa thành id
+            route = "document_detail/{id}",
             arguments = listOf(navArgument("id") { type = NavType.StringType })
         ) { backStackEntry ->
-            val documentId = backStackEntry.arguments?.getString("id") ?: "" // Lấy id từ URL
+            val documentId = backStackEntry.arguments?.getString("id") ?: ""
 
             DocumentDetailScreen(
-                documentId = documentId, // Truyền đúng tên biến documentId
+                documentId = documentId,
                 onBackClick = { navController.popBackStack() },
                 onHomeClick = {
                     navController.navigate("home") { popUpTo("home") { inclusive = true } }
@@ -90,39 +89,44 @@ fun AppNavigation() {
             )
         }
 
-        // 5. Màn hình Đăng tài liệu (Upload)
+        // 5. Màn hình Upload tài liệu
         composable("upload") {
             UploadScreen(
                 onBackClick = { navController.popBackStack() },
                 onHomeClick = {
                     navController.navigate("home") { popUpTo("home") { inclusive = true } }
                 },
-                onUploadClick = { /* Không làm gì vì đang ở Upload */ },
+                onUploadClick = { /* Đang ở chính nó */ },
                 onProfileClick = { navController.navigate("profile") },
                 onSearchClick = { navController.navigate("search") }
             )
         }
 
-        // 6. Màn hình Hồ sơ (Profile)
+        // 6. Màn hình Hồ sơ (Đã cập nhật các tham số mới)
         composable("profile") {
             ProfileScreen(
                 onBackClick = { navController.popBackStack() },
                 onLogoutClick = {
+                    // Đăng xuất và xóa sạch lịch sử để về màn login
+                    FirebaseAuth.getInstance().signOut()
                     navController.navigate("login") {
                         popUpTo(0) { inclusive = true }
                     }
                 },
-                onNavigateToMyDocs = {
-                    navController.navigate("my_documents")
+                onSearchClick = {
+                    navController.navigate("search")
+                },
+                onUploadClick = {
+                    navController.navigate("upload")
                 }
             )
         }
 
-        // 7. Màn hình Tìm kiếm (Search)
+        // 7. Màn hình Tìm kiếm
         composable("search") {
             SearchScreen(
                 onBackClick = { navController.popBackStack() },
-                onDocumentClick = { id -> // Đã sửa thành id
+                onDocumentClick = { id ->
                     navController.navigate("document_detail/$id")
                 },
                 onHomeClick = {
@@ -133,7 +137,7 @@ fun AppNavigation() {
             )
         }
 
-        // 8. Màn hình Quản lý tài liệu của tôi
+        // 8. Màn hình phụ: Quản lý tài liệu của tôi (Nếu cần dùng riêng)
         composable("my_documents") {
             MyDocumentsScreen(
                 onBackClick = { navController.popBackStack() }

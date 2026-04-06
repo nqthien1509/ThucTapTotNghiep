@@ -18,6 +18,12 @@ class ProfileViewModel : ViewModel() {
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    // =======================================================
+    // THÊM STATE QUẢN LÝ VUỐT LÀM MỚI (PULL-TO-REFRESH)
+    // =======================================================
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
@@ -34,6 +40,7 @@ class ProfileViewModel : ViewModel() {
         loadMyDocuments()
     }
 
+    // Hàm load dữ liệu lần đầu (Sử dụng vòng xoay lớn giữa màn hình)
     fun loadMyDocuments() {
         viewModelScope.launch {
             _isLoading.value = true
@@ -46,6 +53,25 @@ class ProfileViewModel : ViewModel() {
                 _errorMessage.value = e.message
             } finally {
                 _isLoading.value = false
+            }
+        }
+    }
+
+    // =======================================================
+    // HÀM MỚI: Tải lại dữ liệu khi vuốt (Sử dụng vòng xoay nhỏ)
+    // =======================================================
+    fun refreshDocuments() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            _errorMessage.value = null
+            try {
+                // Gọi lại API để cập nhật trạng thái mới nhất (từ RabbitMQ)
+                val result = RetrofitClient.apiService.getMyDocuments(userName)
+                _myDocuments.value = result
+            } catch (e: Exception) {
+                _errorMessage.value = e.message
+            } finally {
+                _isRefreshing.value = false
             }
         }
     }
