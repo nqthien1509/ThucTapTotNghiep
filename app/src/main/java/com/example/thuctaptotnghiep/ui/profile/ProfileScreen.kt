@@ -37,7 +37,7 @@ fun ProfileScreen(
     onLogoutClick: () -> Unit,
     onSearchClick: () -> Unit,
     onUploadClick: () -> Unit,
-    onDocumentClick: (String) -> Unit // THÊM HÀM NÀY ĐỂ MỞ MÀN CHI TIẾT
+    onDocumentClick: (String) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -51,12 +51,16 @@ fun ProfileScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val deleteStatus by viewModel.deleteStatus.collectAsState()
 
+    // ==========================================
+    // STATE QUẢN LÝ MENU VÀ DIALOG ĐỔI MẬT KHẨU
+    // ==========================================
+    var showSettingsMenu by remember { mutableStateOf(false) }
+    var showChangePasswordDialog by remember { mutableStateOf(false) }
+
     var selectedTabIndex by remember { mutableStateOf(0) }
-    // Đổi tên Tab một chút cho khớp với chức năng
     val tabs = listOf("Tài liệu đã đăng", "Yêu thích", "Xem sau")
     var documentToDelete by remember { mutableStateOf<Document?>(null) }
 
-    // Xác định danh sách hiện tại đang hiển thị dựa vào Tab đang chọn
     val currentList = when (selectedTabIndex) {
         0 -> myDocuments
         1 -> favoriteDocuments
@@ -95,11 +99,37 @@ fun ProfileScreen(
                     drawPath(path, Color(0xFF4C9EEB))
                 }
 
-                IconButton(
-                    onClick = onLogoutClick,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 40.dp, end = 16.dp).background(Color.White.copy(alpha = 0.2f), CircleShape).size(36.dp)
-                ) {
-                    Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White, modifier = Modifier.size(20.dp))
+                // ==========================================
+                // MENU DROP DOWN: CÀI ĐẶT
+                // ==========================================
+                Box(modifier = Modifier.align(Alignment.TopEnd).padding(top = 40.dp, end = 16.dp)) {
+                    IconButton(
+                        onClick = { showSettingsMenu = true },
+                        modifier = Modifier.background(Color.White.copy(alpha = 0.2f), CircleShape).size(36.dp)
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+
+                    DropdownMenu(
+                        expanded = showSettingsMenu,
+                        onDismissRequest = { showSettingsMenu = false },
+                        modifier = Modifier.background(Color.White)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Đổi mật khẩu") },
+                            onClick = {
+                                showSettingsMenu = false
+                                showChangePasswordDialog = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Đăng xuất", color = Color.Red, fontWeight = FontWeight.Bold) },
+                            onClick = {
+                                showSettingsMenu = false
+                                viewModel.logout { onLogoutClick() }
+                            }
+                        )
+                    }
                 }
 
                 Row(
@@ -112,7 +142,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text(text = viewModel.userName, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        Text(text = "Sinh viên UTC", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
+                        Text(text = "Sinh viên UTH", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
                     }
                 }
 
@@ -144,13 +174,10 @@ fun ProfileScreen(
                 }
             }
 
-            // =======================================================
-            // DANH SÁCH TÀI LIỆU DÙNG CHUNG CHO CẢ 3 TAB
-            // =======================================================
             Box(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
                 PullToRefreshBox(
                     isRefreshing = isRefreshing,
-                    onRefresh = { viewModel.refreshDocuments() }, // Làm mới cả 3 danh sách
+                    onRefresh = { viewModel.refreshDocuments() },
                     modifier = Modifier.fillMaxSize()
                 ) {
                     if (isLoading && !isRefreshing) {
@@ -179,7 +206,7 @@ fun ProfileScreen(
                             items(currentList) { doc ->
                                 ProfileDocumentItem(
                                     document = doc,
-                                    isOwner = selectedTabIndex == 0, // Chỉ tab 0 mới là chủ sở hữu
+                                    isOwner = selectedTabIndex == 0,
                                     onClick = { onDocumentClick(doc.id) },
                                     onDeleteClick = { documentToDelete = doc }
                                 )
@@ -190,6 +217,9 @@ fun ProfileScreen(
             }
         }
 
+        // ==========================================
+        // DIALOG XÓA TÀI LIỆU
+        // ==========================================
         if (documentToDelete != null) {
             AlertDialog(
                 onDismissRequest = { documentToDelete = null },
@@ -209,6 +239,62 @@ fun ProfileScreen(
                 }
             )
         }
+
+        // =======================================================
+        // DIALOG: ĐỔI MẬT KHẨU
+        // =======================================================
+        if (showChangePasswordDialog) {
+            var newPassword by remember { mutableStateOf("") }
+            var isProcessing by remember { mutableStateOf(false) }
+
+            AlertDialog(
+                onDismissRequest = { showChangePasswordDialog = false },
+                containerColor = Color.White,
+                title = { Text("Đổi mật khẩu", fontWeight = FontWeight.Bold) },
+                text = {
+                    OutlinedTextField(
+                        value = newPassword,
+                        onValueChange = { newPassword = it },
+                        label = { Text("Mật khẩu mới (Tối thiểu 6 ký tự)") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            isProcessing = true
+                            viewModel.changePassword(
+                                newPassword = newPassword,
+                                onSuccess = {
+                                    isProcessing = false
+                                    showChangePasswordDialog = false
+                                    Toast.makeText(context, "Đổi mật khẩu thành công!", Toast.LENGTH_SHORT).show()
+                                },
+                                onError = { errorMsg ->
+                                    isProcessing = false
+                                    Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        },
+                        enabled = newPassword.length >= 6 && !isProcessing,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4C9EEB))
+                    ) {
+                        if (isProcessing) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White)
+                        } else {
+                            Text("Xác nhận", color = Color.White)
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showChangePasswordDialog = false }) {
+                        Text("Hủy", color = Color.Gray)
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -223,7 +309,7 @@ fun ProfileDocumentItem(
         modifier = Modifier
             .fillMaxWidth()
             .height(90.dp)
-            .clickable { onClick() }, // Bấm vào để sang màn hình Detail
+            .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -261,7 +347,6 @@ fun ProfileDocumentItem(
                 Text(text = "${document.downloads}", fontSize = 11.sp, fontWeight = FontWeight.Medium)
             }
 
-            // CHỈ HIỂN THỊ NÚT XÓA Ở TAB "CỦA TÔI"
             if (isOwner) {
                 IconButton(onClick = onDeleteClick, modifier = Modifier.size(36.dp)) {
                     Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFFFCDD2), modifier = Modifier.size(20.dp))

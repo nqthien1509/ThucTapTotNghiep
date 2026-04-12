@@ -115,4 +115,30 @@ class ProfileViewModel : ViewModel() {
     fun resetDeleteStatus() {
         _deleteStatus.value = null
     }
+
+    // =======================================================
+    // 4. TÍNH NĂNG TÀI KHOẢN (ĐĂNG XUẤT & ĐỔI MẬT KHẨU)
+    // =======================================================
+
+    fun logout(onSuccess: () -> Unit) {
+        FirebaseAuth.getInstance().signOut()
+        onSuccess()
+    }
+
+    fun changePassword(newPassword: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        val user = FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            user.updatePassword(newPassword)
+                .addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        onSuccess()
+                    } else {
+                        // Lỗi thường gặp: Yêu cầu đăng nhập lại nếu phiên đăng nhập đã quá cũ
+                        onError(task.exception?.message ?: "Có lỗi xảy ra khi đổi mật khẩu")
+                    }
+                }
+        } else {
+            onError("Không tìm thấy thông tin người dùng")
+        }
+    }
 }

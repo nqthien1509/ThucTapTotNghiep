@@ -24,6 +24,20 @@ fun AppNavigation() {
     val currentUser = FirebaseAuth.getInstance().currentUser
     val startRoute = if (currentUser != null) "home" else "login"
 
+    // =======================================================
+    // HÀM TỐI ƯU ĐIỀU HƯỚNG BOTTOM BAR (CHỐNG TRÀN BỘ NHỚ)
+    // =======================================================
+    val navigateToBottomTab = { route: String ->
+        navController.navigate(route) {
+            // Quay về "home" làm gốc để không tạo ra chuỗi màn hình dài dằng dặc
+            popUpTo("home") {
+                saveState = true // Lưu lại trạng thái của tab (VD: người dùng đang cuộn tới đâu)
+            }
+            launchSingleTop = true // Không mở thêm màn hình mới nếu đã đang ở đúng tab đó
+            restoreState = true    // Phục hồi lại trạng thái cũ khi quay lại
+        }
+    }
+
     NavHost(navController = navController, startDestination = startRoute) {
 
         // 1. Màn hình Đăng nhập
@@ -57,20 +71,14 @@ fun AppNavigation() {
         // 3. Màn hình Chính (Home)
         composable("home") {
             HomeScreen(
-                onNavigateToUpload = { navController.navigate("upload") },
-                onDocumentClick = { id ->
-                    navController.navigate("document_detail/$id")
-                },
-                onProfileClick = {
-                    navController.navigate("profile")
-                },
-                onSearchClick = {
-                    navController.navigate("search")
-                }
+                onNavigateToUpload = { navigateToBottomTab("upload") },
+                onDocumentClick = { id -> navController.navigate("document_detail/$id") },
+                onProfileClick = { navigateToBottomTab("profile") },
+                onSearchClick = { navigateToBottomTab("search") }
             )
         }
 
-        // 4. Màn hình Chi tiết tài liệu (Có truyền ID)
+        // 4. Màn hình Chi tiết tài liệu
         composable(
             route = "document_detail/{id}",
             arguments = listOf(navArgument("id") { type = NavType.StringType })
@@ -80,12 +88,10 @@ fun AppNavigation() {
             DocumentDetailScreen(
                 documentId = documentId,
                 onBackClick = { navController.popBackStack() },
-                onHomeClick = {
-                    navController.navigate("home") { popUpTo("home") { inclusive = true } }
-                },
-                onUploadClick = { navController.navigate("upload") },
-                onProfileClick = { navController.navigate("profile") },
-                onSearchClick = { navController.navigate("search") }
+                onHomeClick = { navigateToBottomTab("home") },
+                onUploadClick = { navigateToBottomTab("upload") },
+                onProfileClick = { navigateToBottomTab("profile") },
+                onSearchClick = { navigateToBottomTab("search") }
             )
         }
 
@@ -93,57 +99,45 @@ fun AppNavigation() {
         composable("upload") {
             UploadScreen(
                 onBackClick = { navController.popBackStack() },
-                onHomeClick = {
-                    navController.navigate("home") { popUpTo("home") { inclusive = true } }
-                },
+                onHomeClick = { navigateToBottomTab("home") },
                 onUploadClick = { /* Đang ở chính nó */ },
-                onProfileClick = { navController.navigate("profile") },
-                onSearchClick = { navController.navigate("search") }
+                onProfileClick = { navigateToBottomTab("profile") },
+                onSearchClick = { navigateToBottomTab("search") }
             )
         }
 
-        // 6. Màn hình Hồ sơ (Đã cập nhật các tham số mới)
+        // 6. Màn hình Hồ sơ (Profile)
         composable("profile") {
             ProfileScreen(
-                onBackClick = { navController.popBackStack() },
+                // Do ProfileScreen gắn onBackClick vào nút Home ở thanh dưới, ta truyền hàm về trang chủ
+                onBackClick = { navigateToBottomTab("home") },
                 onLogoutClick = {
-                    // Đăng xuất và xóa sạch lịch sử để về màn login
                     FirebaseAuth.getInstance().signOut()
                     navController.navigate("login") {
-                        popUpTo(0) { inclusive = true }
+                        // popUpTo(navController.graph.id) là lệnh mạnh nhất để xóa sạch 100% Back Stack
+                        popUpTo(navController.graph.id) { inclusive = true }
                     }
                 },
-                onSearchClick = {
-                    navController.navigate("search")
-                },
-                onUploadClick = {
-                    navController.navigate("upload")
-                },
-                // =======================================================
-                // CẬP NHẬT: XỬ LÝ SỰ KIỆN CLICK VÀO TÀI LIỆU TRONG PROFILE
-                // =======================================================
+                onSearchClick = { navigateToBottomTab("search") },
+                onUploadClick = { navigateToBottomTab("upload") },
                 onDocumentClick = { documentId ->
                     navController.navigate("document_detail/$documentId")
                 }
             )
         }
 
-        // 7. Màn hình Tìm kiếm
+        // 7. Màn hình Tìm kiếm (Search)
         composable("search") {
             SearchScreen(
                 onBackClick = { navController.popBackStack() },
-                onDocumentClick = { id ->
-                    navController.navigate("document_detail/$id")
-                },
-                onHomeClick = {
-                    navController.navigate("home") { popUpTo("home") { inclusive = true } }
-                },
-                onUploadClick = { navController.navigate("upload") },
-                onProfileClick = { navController.navigate("profile") }
+                onDocumentClick = { id -> navController.navigate("document_detail/$id") },
+                onHomeClick = { navigateToBottomTab("home") },
+                onUploadClick = { navigateToBottomTab("upload") },
+                onProfileClick = { navigateToBottomTab("profile") }
             )
         }
 
-        // 8. Màn hình phụ: Quản lý tài liệu của tôi (Nếu cần dùng riêng)
+        // 8. Màn hình phụ: Quản lý tài liệu
         composable("my_documents") {
             MyDocumentsScreen(
                 onBackClick = { navController.popBackStack() }
