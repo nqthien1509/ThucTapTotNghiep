@@ -3,7 +3,7 @@ package com.example.thuctaptotnghiep.ui.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.thuctaptotnghiep.data.model.Document
-import com.example.thuctaptotnghiep.network.RetrofitClient
+import com.example.thuctaptotnghiep.data.network.RetrofitClient
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow

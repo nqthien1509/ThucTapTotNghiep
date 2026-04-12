@@ -155,7 +155,7 @@ fun DocumentCardPreview(document: Document, onClick: () -> Unit) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(text = document.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(modifier = Modifier.weight(1f))
-                Text(text = document.size, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                document.size?.let { Text(text = it, style = MaterialTheme.typography.labelSmall, color = Color.Gray) }
             }
         }
     }

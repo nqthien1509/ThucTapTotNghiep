@@ -118,6 +118,12 @@ fun AppNavigation() {
                 },
                 onUploadClick = {
                     navController.navigate("upload")
+                },
+                // =======================================================
+                // CẬP NHẬT: XỬ LÝ SỰ KIỆN CLICK VÀO TÀI LIỆU TRONG PROFILE
+                // =======================================================
+                onDocumentClick = { documentId ->
+                    navController.navigate("document_detail/$documentId")
                 }
             )
         }

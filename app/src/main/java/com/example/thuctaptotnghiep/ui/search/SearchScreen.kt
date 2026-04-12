@@ -11,7 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Search
@@ -82,7 +82,7 @@ fun SearchScreen(
                         modifier = Modifier.size(40.dp).clip(CircleShape).clickable { onBackClick() },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Tìm kiếm", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -178,7 +178,7 @@ fun SearchResultItem(document: Document, onClick: () -> Unit) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(text = "Đăng bởi: ${document.authorName}", color = Color.Gray, fontSize = 12.sp)
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(text = document.size, color = Color(0xFF4C9EEB), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                document.size?.let { Text(text = it, color = Color(0xFF4C9EEB), fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
             }
         }
     }

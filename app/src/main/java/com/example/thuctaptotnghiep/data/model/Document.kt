@@ -16,7 +16,7 @@ data class Document(
     val fileUrl: String,
 
     @SerializedName("size")
-    val size: String,
+    val size: String?, // Có thể để nullable (?) phòng trường hợp file chưa kịp tính dung lượng
 
     @SerializedName("downloads")
     val downloads: Int = 0,
@@ -28,5 +28,11 @@ data class Document(
     val uploadDate: String,
 
     @SerializedName("status")
-    val status: String = "pending"
+    val status: String = "pending",
+
+    @SerializedName("isFavorite")
+    val isFavorite: Boolean = false,
+
+    @SerializedName("isWatchLater")
+    val isWatchLater: Boolean = false
 )

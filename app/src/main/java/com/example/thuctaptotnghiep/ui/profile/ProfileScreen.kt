@@ -3,6 +3,7 @@ package com.example.thuctaptotnghiep.ui.profile
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,7 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox // IMPORT QUAN TRỌNG
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,30 +29,40 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.thuctaptotnghiep.data.model.Document
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
 
-@OptIn(ExperimentalMaterial3Api::class) // Cần thiết cho PullToRefreshBox
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     viewModel: ProfileViewModel = viewModel(),
     onBackClick: () -> Unit,
     onLogoutClick: () -> Unit,
     onSearchClick: () -> Unit,
-    onUploadClick: () -> Unit
+    onUploadClick: () -> Unit,
+    onDocumentClick: (String) -> Unit // THÊM HÀM NÀY ĐỂ MỞ MÀN CHI TIẾT
 ) {
     val context = LocalContext.current
 
+    // Lắng nghe cả 3 danh sách từ ViewModel
     val myDocuments by viewModel.myDocuments.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    // LẤY STATE IS_REFRESHING TỪ VIEWMODEL
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val favoriteDocuments by viewModel.favoriteDocuments.collectAsState()
+    val watchLaterDocuments by viewModel.watchLaterDocuments.collectAsState()
 
+    val isLoading by viewModel.isLoading.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val deleteStatus by viewModel.deleteStatus.collectAsState()
 
     var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("Tài liệu đã đăng", "Đã lưu", "Đã tải về")
+    // Đổi tên Tab một chút cho khớp với chức năng
+    val tabs = listOf("Tài liệu đã đăng", "Yêu thích", "Xem sau")
     var documentToDelete by remember { mutableStateOf<Document?>(null) }
 
-    // Xử lý thông báo
+    // Xác định danh sách hiện tại đang hiển thị dựa vào Tab đang chọn
+    val currentList = when (selectedTabIndex) {
+        0 -> myDocuments
+        1 -> favoriteDocuments
+        else -> watchLaterDocuments
+    }
+
     LaunchedEffect(errorMessage, deleteStatus) {
         errorMessage?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
         deleteStatus?.let {
@@ -72,7 +83,7 @@ fun ProfileScreen(
         containerColor = Color(0xFFF8F9FA)
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            // Header lượn sóng (Giữ nguyên)
+            // Header lượn sóng
             Box(modifier = Modifier.fillMaxWidth().height(220.dp)) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val path = Path().apply {
@@ -101,7 +112,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text(text = viewModel.userName, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        Text(text = "Sinh viên UTH", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
+                        Text(text = "Sinh viên UTC", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
                     }
                 }
 
@@ -134,49 +145,51 @@ fun ProfileScreen(
             }
 
             // =======================================================
-            // DANH SÁCH TÀI LIỆU CÓ TÍNH NĂNG VUỐT LÀM MỚI
+            // DANH SÁCH TÀI LIỆU DÙNG CHUNG CHO CẢ 3 TAB
             // =======================================================
             Box(modifier = Modifier.fillMaxSize().padding(top = 8.dp)) {
-                if (selectedTabIndex == 0) {
-                    PullToRefreshBox(
-                        isRefreshing = isRefreshing,
-                        onRefresh = { viewModel.refreshDocuments() },
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        // Hiển thị vòng xoay to ở giữa khi load lần đầu (không phải do vuốt)
-                        if (isLoading && !isRefreshing) {
-                            CircularProgressIndicator(color = Color(0xFF4C9EEB), modifier = Modifier.align(Alignment.Center))
-                        } else if (myDocuments.isEmpty()) {
-                            // Bọc trong Scrollable Box để vuốt được ngay cả khi trống
-                            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                item {
-                                    Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                                        Text("Bạn chưa đăng tài liệu nào.", color = Color.Gray)
-                                    }
-                                }
-                            }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(myDocuments) { doc ->
-                                    ProfileDocumentItem(document = doc, onDeleteClick = { documentToDelete = doc })
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = { viewModel.refreshDocuments() }, // Làm mới cả 3 danh sách
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    if (isLoading && !isRefreshing) {
+                        CircularProgressIndicator(color = Color(0xFF4C9EEB), modifier = Modifier.align(Alignment.Center))
+                    } else if (currentList.isEmpty()) {
+
+                        val emptyMessage = when (selectedTabIndex) {
+                            0 -> "Bạn chưa đăng tài liệu nào."
+                            1 -> "Bạn chưa yêu thích tài liệu nào."
+                            else -> "Danh sách xem sau đang trống."
+                        }
+
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            item {
+                                Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text(emptyMessage, color = Color.Gray)
                                 }
                             }
                         }
-                    }
-                } else {
-                    Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Build, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(48.dp))
-                        Text("Tính năng đang phát triển...", color = Color.Gray)
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(currentList) { doc ->
+                                ProfileDocumentItem(
+                                    document = doc,
+                                    isOwner = selectedTabIndex == 0, // Chỉ tab 0 mới là chủ sở hữu
+                                    onClick = { onDocumentClick(doc.id) },
+                                    onDeleteClick = { documentToDelete = doc }
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // Dialog xác nhận xóa (Giữ nguyên)
         if (documentToDelete != null) {
             AlertDialog(
                 onDismissRequest = { documentToDelete = null },
@@ -200,9 +213,17 @@ fun ProfileScreen(
 }
 
 @Composable
-fun ProfileDocumentItem(document: Document, onDeleteClick: () -> Unit) {
+fun ProfileDocumentItem(
+    document: Document,
+    isOwner: Boolean,
+    onClick: () -> Unit,
+    onDeleteClick: () -> Unit
+) {
     Card(
-        modifier = Modifier.fillMaxWidth().height(90.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(90.dp)
+            .clickable { onClick() }, // Bấm vào để sang màn hình Detail
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
@@ -220,7 +241,6 @@ fun ProfileDocumentItem(document: Document, onDeleteClick: () -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = document.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
 
-                // HIỂN THỊ TRẠNG THÁI
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
                     val (statusText, statusColor) = when (document.status) {
                         "verified" -> "✓ Đã kiểm duyệt" to Color(0xFF4CAF50)
@@ -230,7 +250,7 @@ fun ProfileDocumentItem(document: Document, onDeleteClick: () -> Unit) {
 
                     Text(text = statusText, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "${document.size}", fontSize = 11.sp, color = Color.Gray)
+                    Text(text = document.size ?: "N/A", fontSize = 11.sp, color = Color.Gray)
                 }
 
                 Text(text = "Ngày đăng: ${document.uploadDate.take(10)}", fontSize = 10.sp, color = Color.LightGray)
@@ -241,8 +261,13 @@ fun ProfileDocumentItem(document: Document, onDeleteClick: () -> Unit) {
                 Text(text = "${document.downloads}", fontSize = 11.sp, fontWeight = FontWeight.Medium)
             }
 
-            IconButton(onClick = onDeleteClick, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFFFCDD2), modifier = Modifier.size(20.dp))
+            // CHỈ HIỂN THỊ NÚT XÓA Ở TAB "CỦA TÔI"
+            if (isOwner) {
+                IconButton(onClick = onDeleteClick, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFFFCDD2), modifier = Modifier.size(20.dp))
+                }
+            } else {
+                Spacer(modifier = Modifier.width(12.dp))
             }
         }
     }

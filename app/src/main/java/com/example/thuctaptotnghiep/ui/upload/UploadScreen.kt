@@ -13,7 +13,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,7 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.thuctaptotnghiep.network.RetrofitClient
+import com.example.thuctaptotnghiep.data.network.RetrofitClient
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
 import com.google.firebase.auth.FirebaseAuth // ĐÃ THÊM IMPORT FIREBASE
 import kotlinx.coroutines.Dispatchers
@@ -82,7 +83,7 @@ fun UploadScreen(
             Canvas(modifier = Modifier.fillMaxWidth().height(200.dp).align(Alignment.TopCenter)) {
                 val path = Path().apply {
                     lineTo(0f, size.height - 60f)
-                    quadraticBezierTo(size.width * 0.4f, size.height + 20f, size.width, size.height - 80f)
+                    quadraticTo(size.width * 0.4f, size.height + 20f, size.width, size.height - 80f)
                     lineTo(size.width, 0f)
                     close()
                 }
@@ -99,7 +100,7 @@ fun UploadScreen(
                     .clickable { onBackClick() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại", tint = Color.Black)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại", tint = Color.Black)
             }
 
             // Nội dung chính
@@ -139,7 +140,7 @@ fun UploadScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             Text("Kéo & thả tài liệu vào đây\nhoặc bấm để chọn", textAlign = TextAlign.Center, color = Color.DarkGray, fontSize = 14.sp)
                         } else {
-                            Icon(Icons.Default.InsertDriveFile, contentDescription = null, tint = Color(0xFF6FB1F0), modifier = Modifier.size(48.dp))
+                            Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = null, tint = Color(0xFF6FB1F0), modifier = Modifier.size(48.dp))
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(selectedFileName!!, fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Spacer(modifier = Modifier.height(16.dp))
@@ -221,12 +222,12 @@ fun getFileName(context: Context, uri: Uri): String? {
     var result: String? = null
     if (uri.scheme == "content") {
         val cursor = context.contentResolver.query(uri, null, null, null, null)
-        try {
+        cursor.use { cursor ->
             if (cursor != null && cursor.moveToFirst()) {
                 val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                 if (index >= 0) result = cursor.getString(index)
             }
-        } finally { cursor?.close() }
+        }
     }
     if (result == null) {
         result = uri.path

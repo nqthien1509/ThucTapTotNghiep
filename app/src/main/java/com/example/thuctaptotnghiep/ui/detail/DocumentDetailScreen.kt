@@ -14,9 +14,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
@@ -30,18 +34,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel // Import MVVM
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
+import com.google.firebase.auth.FirebaseAuth
 import com.rizzi.bouquet.ResourceType
 import com.rizzi.bouquet.VerticalPDFReader
 import com.rizzi.bouquet.rememberVerticalPdfReaderState
 
-
-
 @Composable
 fun DocumentDetailScreen(
     documentId: String,
-    viewModel: DetailViewModel = viewModel(), // <-- TIÊM VIEWMODEL VÀO ĐÂY
+    viewModel: DetailViewModel = viewModel(),
     onBackClick: () -> Unit,
     onHomeClick: () -> Unit,
     onUploadClick: () -> Unit,
@@ -50,29 +53,34 @@ fun DocumentDetailScreen(
 ) {
     val context = LocalContext.current
 
-    // "LẮNG NGHE" DỮ LIỆU TỪ VIEWMODEL
+    // Giả lập ID người dùng hiện tại (Sau này bạn lấy từ SharedPreferences hoặc Firebase Auth)
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    val currentUserId = currentUser?.uid ?: "default_id"
+
+    // LẮNG NGHE DỮ LIỆU TỪ VIEWMODEL
     val document by viewModel.document.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
 
-    // Biến trạng thái để mở giao diện xem PDF toàn màn hình
+    // Thêm lắng nghe trạng thái 2 nút tương tác
+    val isFavorite by viewModel.isFavorite.collectAsState()
+    val isWatchLater by viewModel.isWatchLater.collectAsState()
+
     var isPreviewOpen by remember { mutableStateOf(false) }
 
-    // Tự động lấy dữ liệu khi ID thay đổi
+    // Tự động lấy dữ liệu khi ID thay đổi (Truyền thêm userId)
     LaunchedEffect(documentId) {
         if (documentId.isNotEmpty()) {
-            viewModel.fetchDocumentDetail(documentId)
+            viewModel.fetchDocumentDetail(documentId, currentUserId)
         }
     }
 
-    // Hiển thị thông báo nếu có lỗi từ Server
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
             Toast.makeText(context, "Lỗi: $it", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Xử lý nút Back của điện thoại: Nếu đang mở PDF thì đóng PDF lại, chứ không thoát hẳn ra ngoài
     BackHandler(enabled = isPreviewOpen) {
         isPreviewOpen = false
     }
@@ -83,20 +91,17 @@ fun DocumentDetailScreen(
     if (isPreviewOpen && document != null) {
         val fullUrl = "http://10.0.2.2:3000${document!!.fileUrl}"
 
-        // Khởi tạo bộ nhớ cho thư viện đọc PDF
         val pdfState = rememberVerticalPdfReaderState(
             resource = ResourceType.Remote(fullUrl),
             isZoomEnable = true
         )
 
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-            // Màn hình lật trang PDF
             VerticalPDFReader(
                 state = pdfState,
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Thanh công cụ phía trên (Nút Đóng)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -137,7 +142,7 @@ fun DocumentDetailScreen(
                                     .background(Color.White.copy(alpha = 0.8f), CircleShape).clip(CircleShape).clickable { onBackClick() },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.Black)
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.Black)
                             }
                             Icon(Icons.Default.PictureAsPdf, contentDescription = "PDF Cover", tint = Color(0xFF4C9EEB), modifier = Modifier.size(100.dp).align(Alignment.Center))
                         }
@@ -147,9 +152,46 @@ fun DocumentDetailScreen(
                             modifier = Modifier.offset(y = (-20).dp).fillMaxWidth()
                                 .background(Color.White, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).padding(24.dp)
                         ) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-                                Text(text = doc.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.Gray, modifier = Modifier.padding(start = 16.dp).clickable { /* TODO */ })
+
+                            // ==========================================
+                            // CẬP NHẬT: TIÊU ĐỀ VÀ CỤM NÚT TƯƠNG TÁC
+                            // ==========================================
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Text(
+                                    text = doc.title,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // Nút Xem lại sau (Bookmark)
+                                    IconButton(onClick = { viewModel.toggleWatchLater(doc.id, currentUserId) }) {
+                                        Icon(
+                                            imageVector = if (isWatchLater) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                            contentDescription = "Xem sau",
+                                            tint = if (isWatchLater) Color(0xFF4C9EEB) else Color.Gray
+                                        )
+                                    }
+
+                                    // Nút Yêu thích (Favorite)
+                                    IconButton(onClick = { viewModel.toggleFavorite(doc.id, currentUserId) }) {
+                                        Icon(
+                                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                            contentDescription = "Yêu thích",
+                                            tint = if (isFavorite) Color.Red else Color.Gray
+                                        )
+                                    }
+
+                                    // Nút Share
+                                    IconButton(onClick = { /* TODO: Xử lý share link */ }) {
+                                        Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.Gray)
+                                    }
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(12.dp))
@@ -171,18 +213,16 @@ fun DocumentDetailScreen(
                                 modifier = Modifier.fillMaxWidth().background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp)).padding(16.dp),
                                 horizontalArrangement = Arrangement.SpaceAround
                             ) {
-                                InfoItem("Dung lượng", doc.size)
+                                // Xử lý trường hợp size bị null
+                                InfoItem("Dung lượng", doc.size ?: "N/A")
                                 InfoItem("Lượt xem", "${doc.views}")
                                 InfoItem("Lượt tải", "${doc.downloads}")
                             }
 
                             Spacer(modifier = Modifier.height(32.dp))
 
-                            // ==========================================
                             // NÚT XEM TRƯỚC VÀ NÚT TẢI VỀ
-                            // ==========================================
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                // Nút Xem trước
                                 Button(
                                     onClick = { isPreviewOpen = true },
                                     modifier = Modifier.weight(1f).height(56.dp),
@@ -194,7 +234,6 @@ fun DocumentDetailScreen(
                                     Text("XEM TRƯỚC", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                 }
 
-                                // Nút Tải về
                                 Button(
                                     onClick = { downloadDocument(context, doc.fileUrl, doc.title) },
                                     modifier = Modifier.weight(1f).height(56.dp),
@@ -225,7 +264,6 @@ fun InfoItem(label: String, value: String) {
     }
 }
 
-// Hàm tải xuống giữ nguyên
 fun downloadDocument(context: Context, fileUrl: String, title: String) {
     try {
         val fullUrl = "http://10.0.2.2:3000$fileUrl"

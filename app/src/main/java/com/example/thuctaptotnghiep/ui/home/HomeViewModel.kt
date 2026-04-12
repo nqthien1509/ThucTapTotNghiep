@@ -3,7 +3,7 @@ package com.example.thuctaptotnghiep.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.thuctaptotnghiep.data.model.Document
-import com.example.thuctaptotnghiep.network.RetrofitClient
+import com.example.thuctaptotnghiep.data.network.RetrofitClient
 import com.google.firebase.auth.FirebaseAuth // ĐÃ THÊM IMPORT FIREBASE
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

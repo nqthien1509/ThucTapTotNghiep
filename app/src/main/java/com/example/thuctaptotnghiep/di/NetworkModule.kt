@@ -1,6 +1,6 @@
 package com.example.thuctaptotnghiep.di
 
-import com.example.thuctaptotnghiep.data.remote.ApiService
+import com.example.thuctaptotnghiep.data.network.ApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

@@ -9,7 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material3.*
@@ -24,7 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.thuctaptotnghiep.data.model.Document
-import com.example.thuctaptotnghiep.network.RetrofitClient
+import com.example.thuctaptotnghiep.data.network.RetrofitClient
 import kotlinx.coroutines.launch
 
 @Composable
@@ -74,7 +74,7 @@ fun MyDocumentsScreen(onBackClick: () -> Unit) {
                     modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFFF5F5F5)).clickable { onBackClick() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.Black)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.Black)
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Text("Tài liệu của tôi", fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -162,7 +162,7 @@ fun MyDocumentItem(document: Document, onDeleteClick: () -> Unit) {
                 Text(text = document.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(text = "Đã tải lên: ${document.uploadDate.take(10)}", color = Color.Gray, fontSize = 12.sp)
-                Text(text = document.size, color = Color(0xFF4C9EEB), fontSize = 12.sp)
+                document.size?.let { Text(text = it, color = Color(0xFF4C9EEB), fontSize = 12.sp) }
             }
             // Nút Thùng rác
             IconButton(onClick = onDeleteClick) {
