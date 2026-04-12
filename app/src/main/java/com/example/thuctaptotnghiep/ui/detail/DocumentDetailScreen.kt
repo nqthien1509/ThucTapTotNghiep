@@ -8,13 +8,14 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
@@ -52,23 +53,17 @@ fun DocumentDetailScreen(
     onSearchClick: () -> Unit
 ) {
     val context = LocalContext.current
-
-    // Giả lập ID người dùng hiện tại (Sau này bạn lấy từ SharedPreferences hoặc Firebase Auth)
     val currentUser = FirebaseAuth.getInstance().currentUser
     val currentUserId = currentUser?.uid ?: "default_id"
-
-    // LẮNG NGHE DỮ LIỆU TỪ VIEWMODEL
     val document by viewModel.document.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
 
-    // Thêm lắng nghe trạng thái 2 nút tương tác
     val isFavorite by viewModel.isFavorite.collectAsState()
     val isWatchLater by viewModel.isWatchLater.collectAsState()
 
     var isPreviewOpen by remember { mutableStateOf(false) }
 
-    // Tự động lấy dữ liệu khi ID thay đổi (Truyền thêm userId)
     LaunchedEffect(documentId) {
         if (documentId.isNotEmpty()) {
             viewModel.fetchDocumentDetail(documentId, currentUserId)
@@ -85,22 +80,15 @@ fun DocumentDetailScreen(
         isPreviewOpen = false
     }
 
-    // =====================================================================
-    // GIAO DIỆN XEM TRƯỚC PDF (FULL SCREEN)
-    // =====================================================================
     if (isPreviewOpen && document != null) {
         val fullUrl = "http://10.0.2.2:3000${document!!.fileUrl}"
-
         val pdfState = rememberVerticalPdfReaderState(
             resource = ResourceType.Remote(fullUrl),
             isZoomEnable = true
         )
 
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-            VerticalPDFReader(
-                state = pdfState,
-                modifier = Modifier.fillMaxSize()
-            )
+            VerticalPDFReader(state = pdfState, modifier = Modifier.fillMaxSize())
 
             Row(
                 modifier = Modifier
@@ -116,15 +104,9 @@ fun DocumentDetailScreen(
                 Text(text = document!!.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
-    }
-    // =====================================================================
-    // GIAO DIỆN CHI TIẾT TÀI LIỆU BÌNH THƯỜNG
-    // =====================================================================
-    else {
+    } else {
         Scaffold(
-            bottomBar = {
-                AppBottomNavigationBar(onHomeClick, onUploadClick, onProfileClick, onSearchClick)
-            },
+            bottomBar = { AppBottomNavigationBar(onHomeClick, onUploadClick, onProfileClick, onSearchClick) },
             containerColor = Color(0xFFF5F5F5)
         ) { paddingValues ->
             Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
@@ -135,66 +117,57 @@ fun DocumentDetailScreen(
                     val doc = document!!
 
                     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                        // Header Ảnh bìa và nút Back
                         Box(modifier = Modifier.fillMaxWidth().height(260.dp).background(Color(0xFFE3F2FD))) {
                             Box(
                                 modifier = Modifier.padding(top = 40.dp, start = 20.dp).size(44.dp)
                                     .background(Color.White.copy(alpha = 0.8f), CircleShape).clip(CircleShape).clickable { onBackClick() },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.Black)
+                                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.Black)
                             }
                             Icon(Icons.Default.PictureAsPdf, contentDescription = "PDF Cover", tint = Color(0xFF4C9EEB), modifier = Modifier.size(100.dp).align(Alignment.Center))
                         }
 
-                        // Phần Thông tin sách
                         Column(
                             modifier = Modifier.offset(y = (-20).dp).fillMaxWidth()
                                 .background(Color.White, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)).padding(24.dp)
                         ) {
 
-                            // ==========================================
-                            // CẬP NHẬT: TIÊU ĐỀ VÀ CỤM NÚT TƯƠNG TÁC
-                            // ==========================================
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                Text(
-                                    text = doc.title,
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.weight(1f)
-                                )
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                                Text(text = doc.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    // Nút Xem lại sau (Bookmark)
                                     IconButton(onClick = { viewModel.toggleWatchLater(doc.id, currentUserId) }) {
-                                        Icon(
-                                            imageVector = if (isWatchLater) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                            contentDescription = "Xem sau",
-                                            tint = if (isWatchLater) Color(0xFF4C9EEB) else Color.Gray
-                                        )
+                                        Icon(imageVector = if (isWatchLater) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, contentDescription = "Xem sau", tint = if (isWatchLater) Color(0xFF4C9EEB) else Color.Gray)
                                     }
-
-                                    // Nút Yêu thích (Favorite)
                                     IconButton(onClick = { viewModel.toggleFavorite(doc.id, currentUserId) }) {
-                                        Icon(
-                                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                            contentDescription = "Yêu thích",
-                                            tint = if (isFavorite) Color.Red else Color.Gray
-                                        )
+                                        Icon(imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, contentDescription = "Yêu thích", tint = if (isFavorite) Color.Red else Color.Gray)
                                     }
-
-                                    // Nút Share
                                     IconButton(onClick = { /* TODO: Xử lý share link */ }) {
                                         Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.Gray)
                                     }
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // ==========================================
+                            // ĐÃ SỬA LỖI: DÙNG isNullOrBlank() CHO AN TOÀN
+                            // ==========================================
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier.background(Color(0xFFE8F5E9), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    val safeCategory = if (doc.category.isNullOrBlank()) "Tài liệu" else doc.category!!
+                                    Text(text = safeCategory, color = Color(0xFF2E7D32), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                val safeSubject = if (doc.subject.isNullOrBlank()) "Chưa phân loại môn học" else doc.subject!!
+                                Text(text = "•  $safeSubject", fontSize = 14.sp, color = Color(0xFF4C9EEB), fontWeight = FontWeight.Medium)
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF4C9EEB)), contentAlignment = Alignment.Center) {
@@ -213,15 +186,45 @@ fun DocumentDetailScreen(
                                 modifier = Modifier.fillMaxWidth().background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp)).padding(16.dp),
                                 horizontalArrangement = Arrangement.SpaceAround
                             ) {
-                                // Xử lý trường hợp size bị null
                                 InfoItem("Dung lượng", doc.size ?: "N/A")
                                 InfoItem("Lượt xem", "${doc.views}")
                                 InfoItem("Lượt tải", "${doc.downloads}")
                             }
 
-                            Spacer(modifier = Modifier.height(32.dp))
+                            Spacer(modifier = Modifier.height(24.dp))
 
-                            // NÚT XEM TRƯỚC VÀ NÚT TẢI VỀ
+                            if (!doc.description.isNullOrBlank()) {
+                                Text(text = "Mô tả", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = doc.description!!,
+                                    fontSize = 14.sp,
+                                    color = Color.DarkGray,
+                                    lineHeight = 22.sp
+                                )
+                                Spacer(modifier = Modifier.height(20.dp))
+                            }
+
+                            if (!doc.tags.isNullOrEmpty()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    doc.tags.forEach { tag ->
+                                        Box(
+                                            modifier = Modifier
+                                                .background(Color(0xFFF0F0F0), RoundedCornerShape(16.dp))
+                                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                        ) {
+                                            Text(text = "#$tag", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(32.dp))
+                            } else {
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 Button(
                                     onClick = { isPreviewOpen = true },

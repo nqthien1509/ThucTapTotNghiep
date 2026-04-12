@@ -14,12 +14,19 @@ import retrofit2.http.Query
 
 interface ApiService {
 
+    // ==========================================
+    // API UPLOAD
+    // ==========================================
     @Multipart
     @POST("api/upload")
     suspend fun uploadDocument(
         @Part file: MultipartBody.Part,
         @Part("title") title: RequestBody,
-        @Part("authorName") authorName: RequestBody
+        @Part("authorName") authorName: RequestBody,
+        @Part("subject") subject: RequestBody,         // Môn học
+        @Part("category") category: RequestBody,       // Loại tài liệu
+        @Part("description") description: RequestBody, // Mô tả
+        @Part("tags") tags: RequestBody                // Nhãn (Tags)
     ): Any
 
     @GET("api/documents")
@@ -32,8 +39,14 @@ interface ApiService {
         @Query("userId") userId: String? = null
     ): Document
 
+    // ==========================================
+    // CẬP NHẬT: API TÌM KIẾM HỖ TRỢ LỌC THEO CATEGORY
+    // ==========================================
     @GET("api/search")
-    suspend fun searchDocuments(@Query("q") keyword: String): List<Document>
+    suspend fun searchDocuments(
+        @Query("q") keyword: String,
+        @Query("category") category: String? = null // <- THÊM DÒNG NÀY
+    ): List<Document>
 
     // =======================================================
     // API: TRUY XUẤT DANH SÁCH THEO USER (PROFILE)
@@ -43,11 +56,11 @@ interface ApiService {
     @GET("api/my-documents/{authorName}")
     suspend fun getMyDocuments(@Path("authorName") authorName: String): List<Document>
 
-    // 2. THÊM MỚI: Lấy danh sách tài liệu đã Yêu thích
+    // 2. Lấy danh sách tài liệu đã Yêu thích
     @GET("api/users/{userId}/favorites")
     suspend fun getFavoriteDocuments(@Path("userId") userId: String): List<Document>
 
-    // 3. THÊM MỚI: Lấy danh sách tài liệu đã Xem sau
+    // 3. Lấy danh sách tài liệu đã Xem sau
     @GET("api/users/{userId}/watch-later")
     suspend fun getWatchLaterDocuments(@Path("userId") userId: String): List<Document>
 

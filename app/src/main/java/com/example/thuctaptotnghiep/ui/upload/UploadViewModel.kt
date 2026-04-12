@@ -4,8 +4,9 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.thuctaptotnghiep.data.repository.DocumentRepository
-import com.example.thuctaptotnghiep.utils.FileUtils // Import FileUtils bạn vừa tạo
+import com.example.thuctaptotnghiep.data.network.RetrofitClient // Sử dụng trực tiếp RetrofitClient
+// import com.example.thuctaptotnghiep.data.repository.DocumentRepository // (Mở comment nếu bạn dùng Repository)
+import com.example.thuctaptotnghiep.utils.FileUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,62 +20,86 @@ import javax.inject.Inject
 
 @HiltViewModel
 class UploadViewModel @Inject constructor(
-    private val repository: DocumentRepository
+    // private val repository: DocumentRepository // Mở comment nếu bạn muốn gọi qua Repository
 ) : ViewModel() {
 
-    private val _title = MutableStateFlow("")
-    val title: StateFlow<String> = _title.asStateFlow()
+    // ==========================================
+    // STATE QUẢN LÝ GIAO DIỆN TỪ VIEWMODEL
+    // ==========================================
+    private val _isUploading = MutableStateFlow(false)
+    val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
 
-    private val _description = MutableStateFlow("")
-    val description: StateFlow<String> = _description.asStateFlow()
+    private val _uploadSuccess = MutableStateFlow(false)
+    val uploadSuccess: StateFlow<Boolean> = _uploadSuccess.asStateFlow()
 
-    private val _price = MutableStateFlow("")
-    val price: StateFlow<String> = _price.asStateFlow()
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    private val _selectedFileUri = MutableStateFlow<Uri?>(null)
-    val selectedFileUri: StateFlow<Uri?> = _selectedFileUri.asStateFlow()
-
-    fun updateTitle(newTitle: String) { _title.value = newTitle }
-    fun updateDescription(newDesc: String) { _description.value = newDesc }
-    fun updatePrice(newPrice: String) { _price.value = newPrice }
-    fun onFileSelected(uri: Uri?) { _selectedFileUri.value = uri }
-
-    // Nhận thêm Context từ màn hình truyền vào để xử lý File
-    fun submitDocument(context: Context) {
+    // ==========================================
+    // HÀM XỬ LÝ UPLOAD CHÍNH
+    // ==========================================
+    fun uploadDocument(
+        context: Context,
+        uri: Uri,
+        title: String,
+        authorName: String,
+        subject: String,
+        category: String,
+        description: String,
+        tags: String
+    ) {
         viewModelScope.launch {
+            // Đặt trạng thái bắt đầu tải lên
+            _isUploading.value = true
+            _errorMessage.value = null
+            _uploadSuccess.value = false
+
             try {
-                println(" Bắt đầu quá trình chuẩn bị dữ liệu...")
-                val currentUri = _selectedFileUri.value
+                // 1. Chuyển Uri thành File thực tế
+                val file = FileUtils.uriToFile(context, uri)
 
-                if (currentUri != null) {
-                    // 1. Chuyển Uri (đường dẫn ảo) thành File thực tế thông qua FileUtils
-                    val file = FileUtils.uriToFile(context, currentUri)
+                if (file != null) {
+                    // 2. Ép kiểu File thành dạng MultipartBody.Part (Chuyên dùng gửi File)
+                    val requestFile = file.asRequestBody("application/pdf".toMediaTypeOrNull())
+                    val filePart = MultipartBody.Part.createFormData("file", file.name, requestFile)
 
-                    if (file != null) {
-                        // 2. Ép kiểu File thành dạng MultipartBody.Part (Chuyên dùng để gửi File qua mạng)
-                        val requestFile = file.asRequestBody("application/pdf".toMediaTypeOrNull())
-                        // "file" ở đây là tên của trường dữ liệu mà Backend yêu cầu (phải khớp với API)
-                        val filePart = MultipartBody.Part.createFormData("file", file.name, requestFile)
+                    // 3. Ép kiểu các Text thành RequestBody
+                    val titleBody = title.toRequestBody("text/plain".toMediaTypeOrNull())
+                    val authorBody = authorName.toRequestBody("text/plain".toMediaTypeOrNull())
+                    val subjectBody = subject.toRequestBody("text/plain".toMediaTypeOrNull())
+                    val categoryBody = category.toRequestBody("text/plain".toMediaTypeOrNull())
+                    val descBody = description.toRequestBody("text/plain".toMediaTypeOrNull())
+                    val tagsBody = tags.toRequestBody("text/plain".toMediaTypeOrNull())
 
-                        // 3. Ép kiểu các Text (Title, Description, Price) thành RequestBody
-                        val titleBody = _title.value.toRequestBody("text/plain".toMediaTypeOrNull())
-                        val descBody = _description.value.toRequestBody("text/plain".toMediaTypeOrNull())
-                        val priceBody = _price.value.toRequestBody("text/plain".toMediaTypeOrNull())
+                    // 4. GỌI API (Nếu bạn thiết lập Repository thì thay RetrofitClient bằng repository.uploadDocument)
+                    RetrofitClient.apiService.uploadDocument(
+                        file = filePart,
+                        title = titleBody,
+                        authorName = authorBody,
+                        subject = subjectBody,
+                        category = categoryBody,
+                        description = descBody,
+                        tags = tagsBody
+                    )
 
-                        println(" Chuyển đổi File thành công! Nằm tại: ${file.absolutePath}")
-                        println(" Đã đóng gói xong dữ liệu Text.")
+                    // Nếu API chạy không ném ra lỗi (catch) thì tức là thành công
+                    _uploadSuccess.value = true
 
-                        // 4. GỌI API (Đang tạm comment chờ Backend hoàn thiện)
-                        // repository.uploadDocument(titleBody, descBody, priceBody, filePart)
-
-                        println(" Giả lập Upload thành công lên Server!")
-                    } else {
-                        println(" Lỗi: Không thể tạo file từ Uri (Có thể do thiếu quyền hoặc file bị lỗi)")
-                    }
+                } else {
+                    _errorMessage.value = "Không thể đọc được file PDF từ thiết bị của bạn."
                 }
             } catch (e: Exception) {
-                println(" Có lỗi xảy ra trong quá trình Upload: ${e.message}")
+                _errorMessage.value = "Lỗi kết nối Server: ${e.message}"
+            } finally {
+                // Tắt vòng xoay Loading dù thành công hay thất bại
+                _isUploading.value = false
             }
         }
+    }
+
+    // Hàm reset trạng thái sau khi hiển thị Toast thành công/thất bại
+    fun resetState() {
+        _uploadSuccess.value = false
+        _errorMessage.value = null
     }
 }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,14 +29,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel // Thêm Import ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.thuctaptotnghiep.data.model.Document
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
-    viewModel: SearchViewModel = viewModel(), // <-- TIÊM VIEWMODEL VÀO ĐÂY
+    viewModel: SearchViewModel = viewModel(),
     onBackClick: () -> Unit,
     onDocumentClick: (String) -> Unit,
     onHomeClick: () -> Unit,
@@ -45,12 +46,16 @@ fun SearchScreen(
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
 
-    // "Lắng nghe" toàn bộ State từ ViewModel
+    // Lắng nghe toàn bộ State từ ViewModel
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val selectedCategory by viewModel.selectedCategory.collectAsState() // THÊM MỚI
     val searchResults by viewModel.searchResults.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
     val hasSearched by viewModel.hasSearched.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+
+    // Danh sách bộ lọc
+    val categories = listOf("Tất cả", "Slide", "Đề thi", "Giáo trình")
 
     // Bắt lỗi và thông báo
     LaunchedEffect(errorMessage) {
@@ -70,7 +75,7 @@ fun SearchScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Header Tìm kiếm
+            // Header Tìm kiếm (Giữ nguyên thiết kế đẹp của bạn)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -94,7 +99,7 @@ fun SearchScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { newQuery ->
-                        viewModel.onSearchQueryChange(newQuery) // Ném chữ qua cho ViewModel xử lý
+                        viewModel.onSearchQueryChange(newQuery)
                     },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Nhập tên tài liệu...", color = Color.Gray) },
@@ -120,6 +125,36 @@ fun SearchScreen(
                 )
             }
 
+            // ==========================================
+            // THÊM MỚI: THANH CUỘN NGANG CHỨA CÁC BỘ LỌC
+            // ==========================================
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(categories) { category ->
+                    FilterChip(
+                        selected = selectedCategory == category,
+                        onClick = { viewModel.onCategorySelected(category) },
+                        label = { Text(category, fontWeight = FontWeight.Medium) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFF4C9EEB),
+                            selectedLabelColor = Color.White,
+                            containerColor = Color.White,
+                            labelColor = Color.DarkGray
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = selectedCategory == category,
+                            borderColor = Color(0xFF4C9EEB).copy(alpha = 0.3f),
+                            borderWidth = 1.dp
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                }
+            }
+
             // Phần kết quả bên dưới
             Box(modifier = Modifier.fillMaxSize()) {
                 if (isSearching) {
@@ -129,13 +164,13 @@ fun SearchScreen(
                     )
                 } else if (hasSearched && searchResults.isEmpty()) {
                     Text(
-                        "Không tìm thấy tài liệu nào khớp với '$searchQuery'",
+                        "Không tìm thấy tài liệu phù hợp",
                         color = Color.Gray,
                         modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp)
                     )
                 } else {
                     LazyColumn(
-                        contentPadding = PaddingValues(16.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(searchResults) { doc ->
@@ -154,7 +189,7 @@ fun SearchResultItem(document: Document, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -175,8 +210,26 @@ fun SearchResultItem(document: Document, onClick: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(text = "Đăng bởi: ${document.authorName}", color = Color.Gray, fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "Bởi: ${document.authorName}", color = Color.Gray, fontSize = 12.sp)
+
+                    // THÊM MỚI: Hiển thị Loại tài liệu nhỏ nhỏ bên phải
+                    val category = if (document.category.isNullOrBlank()) "Tài liệu" else document.category
+                    Text(
+                        text = category,
+                        color = Color(0xFF2E7D32),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .background(Color(0xFFE8F5E9), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.height(2.dp))
                 document.size?.let { Text(text = it, color = Color(0xFF4C9EEB), fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
             }
