@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const amqp = require('amqplib'); // Thư viện kết nối RabbitMQ
 const Document = require('./models/Document');
+const User = require('./models/User'); // <-- MODEL USER
 
 const app = express();
 
@@ -68,7 +69,7 @@ const upload = multer({ storage: storage });
 // =======================================================
 
 // ==========================================
-// API UPLOAD NHẬN THÊM TRƯỜNG MỚI
+// API UPLOAD TÀI LIỆU (PDF)
 // ==========================================
 app.post('/api/upload', upload.single('file'), async (req, res) => {
     try {
@@ -76,10 +77,10 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
             return res.status(400).json({ message: 'Vui lòng chọn một file PDF!' });
         }
 
-        // 1. Lấy toàn bộ dữ liệu từ form (bao gồm các trường mới)
+        // 1. Lấy toàn bộ dữ liệu từ form
         const { title, authorName, subject, category, description, tags } = req.body;
         
-        // 2. Xử lý Tags: Chuyển chuỗi cách nhau dấu phẩy thành mảng
+        // 2. Xử lý Tags
         const tagsArray = tags ? tags.split(',').map(tag => tag.trim()).filter(tag => tag !== "") : [];
         const sizeInMB = (req.file.size / (1024 * 1024)).toFixed(2) + ' MB';
 
@@ -114,6 +115,76 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     } catch (error) {
         console.error('Lỗi khi upload:', error);
         res.status(500).json({ message: 'Lỗi Server!' });
+    }
+});
+
+// =======================================================
+// API: QUẢN LÝ THÔNG TIN NGƯỜI DÙNG (PROFILE)
+// =======================================================
+
+// 1. Lấy thông tin cá nhân
+app.get('/api/user/:uid', async (req, res) => {
+    try {
+        let user = await User.findById(req.params.uid);
+        
+        // Nếu user chưa có trong MongoDB, trả về 1 object mặc định
+        if (!user) {
+            return res.status(200).json({
+                _id: req.params.uid,
+                email: "",
+                displayName: "",
+                school: "Trường Đại học Giao thông vận tải TP.HCM (UTH)",
+                bio: "",
+                avatarUrl: ""
+            });
+        }
+        res.status(200).json(user);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Lỗi Server" });
+    }
+});
+
+// 2. Cập nhật thông tin cá nhân (Tên, Trường, Bio)
+app.put('/api/user/:uid', async (req, res) => {
+    try {
+        const { email, displayName, school, bio } = req.body;
+        
+        const updatedUser = await User.findByIdAndUpdate(
+            req.params.uid,
+            { email, displayName, school, bio },
+            { new: true, upsert: true }
+        );
+        res.status(200).json(updatedUser);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Lỗi khi cập nhật profile" });
+    }
+});
+
+// ==========================================
+// CẬP NHẬT MỚI: API UPLOAD ẢNH ĐẠI DIỆN
+// ==========================================
+app.post('/api/user/:uid/avatar', upload.single('avatar'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'Vui lòng chọn một file ảnh!' });
+        }
+
+        // Tạo đường dẫn ảnh mới
+        const newAvatarUrl = '/uploads/' + req.file.filename;
+
+        // Cập nhật đường dẫn này vào MongoDB của User
+        const updatedUser = await User.findByIdAndUpdate(
+            req.params.uid,
+            { avatarUrl: newAvatarUrl },
+            { new: true, upsert: true }
+        );
+
+        res.status(200).json(updatedUser);
+    } catch (error) {
+        console.error('Lỗi khi upload avatar:', error);
+        res.status(500).json({ message: 'Lỗi Server khi tải ảnh lên!' });
     }
 });
 
@@ -207,7 +278,7 @@ app.get('/api/documents/:id', async (req, res) => {
 });
 
 // ==========================================
-// CẬP NHẬT: API TÌM KIẾM CÓ THỂ LỌC THEO CATEGORY
+// API TÌM KIẾM CÓ THỂ LỌC THEO CATEGORY
 // ==========================================
 app.get('/api/search', async (req, res) => {
     try {
@@ -216,7 +287,7 @@ app.get('/api/search', async (req, res) => {
 
         // Nếu có từ khóa tìm kiếm
         if (q) {
-            queryObj.title = { $regex: q, $options: 'i' }; // Tìm gần đúng không phân biệt hoa thường
+            queryObj.title = { $regex: q, $options: 'i' }; 
         }
 
         // Nếu có chọn Filter Chip (khác "Tất cả")
@@ -224,7 +295,7 @@ app.get('/api/search', async (req, res) => {
             queryObj.category = category; 
         }
 
-        // Nếu không nhập chữ và không chọn filter nào (hoặc chọn "Tất cả") thì trả về rỗng (chưa tìm kiếm)
+        // Nếu không nhập chữ và không chọn filter nào (hoặc chọn "Tất cả") thì trả về rỗng
         if (!q && (!category || category === 'Tất cả')) {
             return res.status(200).json([]);
         }
@@ -248,14 +319,13 @@ app.get('/api/my-documents/:authorName', async (req, res) => {
 });
 
 // =======================================================
-// API MỚI: LẤY DANH SÁCH TÀI LIỆU ĐÃ LƯU CỦA USER
+// API LẤY DANH SÁCH TÀI LIỆU ĐÃ LƯU CỦA USER
 // =======================================================
 
 // 1. Lấy danh sách tài liệu Yêu thích
 app.get('/api/users/:userId/favorites', async (req, res) => {
     try {
         const { userId } = req.params;
-        // Tìm các tài liệu mà mảng favoritedBy có chứa userId
         const documents = await Document.find({ favoritedBy: userId }).sort({ uploadDate: -1 });
         res.status(200).json(documents);
     } catch (error) {
@@ -268,7 +338,6 @@ app.get('/api/users/:userId/favorites', async (req, res) => {
 app.get('/api/users/:userId/watch-later', async (req, res) => {
     try {
         const { userId } = req.params;
-        // Tìm các tài liệu mà mảng watchLaterBy có chứa userId
         const documents = await Document.find({ watchLaterBy: userId }).sort({ uploadDate: -1 });
         res.status(200).json(documents);
     } catch (error) {
