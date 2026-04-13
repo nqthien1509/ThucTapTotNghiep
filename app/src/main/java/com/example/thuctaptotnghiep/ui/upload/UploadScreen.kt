@@ -62,10 +62,7 @@ fun UploadScreen(
 
     // --- STATE CHO CÁC TRƯỜNG DỮ LIỆU MỚI ---
     var customTitle by remember { mutableStateOf("") }
-
-    // CẬP NHẬT: Biến state đơn giản cho Môn học (thay cho Dropdown)
     var subject by remember { mutableStateOf("") }
-
     var description by remember { mutableStateOf("") }
     var tags by remember { mutableStateOf("") }
 
@@ -178,17 +175,20 @@ fun UploadScreen(
                     // ==========================================
                     OutlinedTextField(
                         value = customTitle,
-                        onValueChange = { customTitle = it },
+                        onValueChange = {
+                            if (it.length <= 100) customTitle = it // CẬP NHẬT: Giới hạn 100 ký tự
+                        },
                         label = { Text("Tiêu đề tài liệu *") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // CẬP NHẬT: Ô nhập liệu Môn học dạng chữ
                     OutlinedTextField(
                         value = subject,
-                        onValueChange = { subject = it },
+                        onValueChange = {
+                            if (it.length <= 50) subject = it // CẬP NHẬT: Giới hạn 50 ký tự
+                        },
                         label = { Text("Môn học *") },
                         placeholder = { Text("VD: Toán cao cấp, Lập trình Android...") },
                         modifier = Modifier.fillMaxWidth(),
@@ -218,7 +218,9 @@ fun UploadScreen(
 
                     OutlinedTextField(
                         value = description,
-                        onValueChange = { description = it },
+                        onValueChange = {
+                            if (it.length <= 500) description = it // CẬP NHẬT: Giới hạn 500 ký tự
+                        },
                         label = { Text("Mô tả nội dung") },
                         modifier = Modifier.fillMaxWidth().height(100.dp),
                         maxLines = 3
@@ -241,7 +243,6 @@ fun UploadScreen(
                     // ==========================================
                     Button(
                         onClick = {
-                            // CẬP NHẬT: Kiểm tra thêm điều kiện người dùng phải nhập Môn học
                             if (customTitle.isBlank() || subject.isBlank() || selectedFileUri == null) {
                                 Toast.makeText(context, "Vui lòng nhập đủ Tiêu đề, Môn học và chọn file!", Toast.LENGTH_SHORT).show()
                                 return@Button
@@ -251,7 +252,21 @@ fun UploadScreen(
                             coroutineScope.launch {
                                 try {
                                     val tempFile = uriToFile(context, selectedFileUri!!)
+
                                     if (tempFile != null) {
+                                        // CẬP NHẬT: Kiểm tra dung lượng file (tối đa 10MB)
+                                        val fileSizeInMB = tempFile.length() / (1024.0 * 1024.0)
+                                        if (fileSizeInMB > 10.0) {
+                                            Toast.makeText(
+                                                context,
+                                                "File quá lớn (${String.format("%.1f", fileSizeInMB)}MB)! Vui lòng chọn file dưới 10MB.",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            tempFile.delete() // Xóa file tạm để giải phóng dung lượng
+                                            isUploading = false
+                                            return@launch // Hủy quá trình upload
+                                        }
+
                                         val requestFile = tempFile.asRequestBody("application/pdf".toMediaTypeOrNull())
                                         val body = MultipartBody.Part.createFormData("file", tempFile.name, requestFile)
 
@@ -260,10 +275,7 @@ fun UploadScreen(
 
                                         val titlePart = customTitle.toRequestBody("text/plain".toMediaTypeOrNull())
                                         val authorPart = actualAuthorName.toRequestBody("text/plain".toMediaTypeOrNull())
-
-                                        // Dùng biến subject gõ tay truyền vào API
                                         val subjectPart = subject.toRequestBody("text/plain".toMediaTypeOrNull())
-
                                         val categoryPart = selectedCategory.toRequestBody("text/plain".toMediaTypeOrNull())
                                         val descriptionPart = description.toRequestBody("text/plain".toMediaTypeOrNull())
                                         val tagsPart = tags.toRequestBody("text/plain".toMediaTypeOrNull())
