@@ -1,6 +1,7 @@
 package com.example.thuctaptotnghiep.data.network
 
 import com.example.thuctaptotnghiep.data.model.Document
+import com.example.thuctaptotnghiep.data.model.User
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.http.Body
@@ -8,6 +9,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -15,7 +17,7 @@ import retrofit2.http.Query
 interface ApiService {
 
     // ==========================================
-    // API UPLOAD
+    // API UPLOAD TÀI LIỆU (PDF)
     // ==========================================
     @Multipart
     @POST("api/upload")
@@ -40,12 +42,12 @@ interface ApiService {
     ): Document
 
     // ==========================================
-    // CẬP NHẬT: API TÌM KIẾM HỖ TRỢ LỌC THEO CATEGORY
+    // API TÌM KIẾM HỖ TRỢ LỌC THEO CATEGORY
     // ==========================================
     @GET("api/search")
     suspend fun searchDocuments(
         @Query("q") keyword: String,
-        @Query("category") category: String? = null // <- THÊM DÒNG NÀY
+        @Query("category") category: String? = null
     ): List<Document>
 
     // =======================================================
@@ -85,4 +87,29 @@ interface ApiService {
         @Path("id") id: String,
         @Body requestBody: Map<String, String>
     ): Any
+
+    // =======================================================
+    // API QUẢN LÝ THÔNG TIN USER (PROFILE)
+    // =======================================================
+
+    // 1. Lấy thông tin User từ MongoDB
+    @GET("api/user/{uid}")
+    suspend fun getUserProfile(@Path("uid") uid: String): User
+
+    // 2. Cập nhật thông tin User (Tên, Trường, Bio...)
+    @PUT("api/user/{uid}")
+    suspend fun updateUserProfile(
+        @Path("uid") uid: String,
+        @Body profileData: Map<String, String>
+    ): User
+
+    // ==========================================
+    // CẬP NHẬT MỚI: API UPLOAD ẢNH ĐẠI DIỆN
+    // ==========================================
+    @Multipart
+    @POST("api/user/{uid}/avatar")
+    suspend fun uploadAvatar(
+        @Path("uid") uid: String,
+        @Part avatar: MultipartBody.Part
+    ): User
 }

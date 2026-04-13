@@ -16,14 +16,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage // <-- IMPORT THƯ VIỆN COIL
 import com.example.thuctaptotnghiep.data.model.Document
+import com.example.thuctaptotnghiep.data.model.User
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
+import com.example.thuctaptotnghiep.utils.UserManager // <-- IMPORT TRẠM TRUNG CHUYỂN
 
 @Composable
 fun HomeScreen(
@@ -38,6 +42,11 @@ fun HomeScreen(
     val documentList by viewModel.documents.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+
+    // ==========================================
+    // CẬP NHẬT: Lắng nghe Dữ liệu User từ Trạm Trung Chuyển (Real-time)
+    // ==========================================
+    val currentUserProfile by UserManager.userProfile.collectAsState()
 
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
@@ -59,8 +68,14 @@ fun HomeScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(paddingValues)
         ) {
-            // ĐÃ CẬP NHẬT: Truyền đúng tên từ Firebase vào Header
-            item { HeaderSection(userName = viewModel.userName, onSearchClick = onSearchClick) }
+            // Truyền đối tượng User và Tên mặc định (từ Firebase) vào Header
+            item {
+                HeaderSection(
+                    userProfile = currentUserProfile,
+                    fallbackName = viewModel.userName,
+                    onSearchClick = onSearchClick
+                )
+            }
 
             if (isLoading) {
                 item {
@@ -81,7 +96,10 @@ fun HomeScreen(
 // ---------------------------------------------------------------------------
 
 @Composable
-fun HeaderSection(userName: String, onSearchClick: () -> Unit) {
+fun HeaderSection(userProfile: User?, fallbackName: String, onSearchClick: () -> Unit) {
+    // Ưu tiên hiển thị tên từ MongoDB (đã đổi), nếu chưa đổi thì lấy tên Firebase
+    val displayUserName = userProfile?.displayName?.takeIf { it.isNotBlank() } ?: fallbackName
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -89,14 +107,41 @@ fun HeaderSection(userName: String, onSearchClick: () -> Unit) {
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(50.dp).clip(CircleShape).background(Color.LightGray), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.Person, contentDescription = "Avatar", tint = Color.White)
+            // ==========================================
+            // CẬP NHẬT: HIỂN THỊ AVATAR ĐỒNG BỘ TỪ SERVER
+            // ==========================================
+            Box(
+                modifier = Modifier
+                    .size(50.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.3f)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!userProfile?.avatarUrl.isNullOrBlank()) {
+                    // Load ảnh từ Server Node.js (10.0.2.2)
+                    val fullImageUrl = "http://10.0.2.2:3000${userProfile!!.avatarUrl}"
+                    AsyncImage(
+                        model = fullImageUrl,
+                        contentDescription = "Avatar",
+                        contentScale = ContentScale.Crop, // Cắt cho vừa hình tròn
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    // Nếu chưa có ảnh, hiện chữ cái đầu của Tên
+                    Text(
+                        text = displayUserName.take(1).uppercase(),
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
+
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text("Xin chào,", color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                // ĐÃ SỬA: Hiển thị biến userName thay vì chữ "Thien"
-                Text(userName, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                // Hiển thị tên đã đồng bộ
+                Text(displayUserName, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
@@ -149,7 +194,6 @@ fun DocumentCardPreview(document: Document, onClick: () -> Unit) {
     ) {
         Column {
             Box(modifier = Modifier.fillMaxWidth().height(110.dp).background(Color(0xFFE3F2FD)), contentAlignment = Alignment.Center) {
-                // Hiển thị chữ cái đầu tiên của sách làm ảnh bìa tạm
                 Text(text = document.title.take(1).uppercase(), fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4C9EEB))
             }
             Column(modifier = Modifier.padding(12.dp)) {
