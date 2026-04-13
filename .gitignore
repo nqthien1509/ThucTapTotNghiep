@@ -1,1 +1,14 @@
+# Node modules
+node_modules/
+
+# Tham số môi trường
+.env
+.env.production
+.env.staging
+.env.local
+
+# File Firebase Admin
 firebase-key.json
+
+# Thư mục chứa file PDF upload tạm thời
+uploads/

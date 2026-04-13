@@ -3,8 +3,6 @@ const mongoose = require('mongoose');
 const documentSchema = new mongoose.Schema({
     title: { type: String, required: true, trim: true },
     authorName: { type: String, required: true, trim: true },
-    
-    // --- 4 TRƯỜNG MỚI ---
     subject: { type: String, required: true }, 
     category: { 
         type: String, 
@@ -13,8 +11,6 @@ const documentSchema = new mongoose.Schema({
     }, 
     description: { type: String, trim: true }, 
     tags: { type: [String], default: [] }, 
-    // -------------------
-
     fileUrl: { type: String, required: true },
     size: { type: String },
     uploadDate: { type: Date, default: Date.now },
