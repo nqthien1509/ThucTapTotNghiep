@@ -29,26 +29,26 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel // CẬP NHẬT: Import hiltViewModel
 import com.example.thuctaptotnghiep.data.model.Document
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
-    viewModel: SearchViewModel = viewModel(),
     onBackClick: () -> Unit,
     onDocumentClick: (String) -> Unit,
     onHomeClick: () -> Unit,
     onUploadClick: () -> Unit,
-    onProfileClick: () -> Unit
+    onProfileClick: () -> Unit,
+    viewModel: SearchViewModel = hiltViewModel() // CẬP NHẬT: Dùng hiltViewModel() thay vì viewModel()
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
 
     // Lắng nghe toàn bộ State từ ViewModel
     val searchQuery by viewModel.searchQuery.collectAsState()
-    val selectedCategory by viewModel.selectedCategory.collectAsState() // THÊM MỚI
+    val selectedCategory by viewModel.selectedCategory.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
     val hasSearched by viewModel.hasSearched.collectAsState()
@@ -66,7 +66,12 @@ fun SearchScreen(
 
     Scaffold(
         bottomBar = {
-            AppBottomNavigationBar(onHomeClick, onUploadClick, onProfileClick, onSearchClick = { /* Đang ở Search */ })
+            AppBottomNavigationBar(
+                onHomeClick = onHomeClick,
+                onUploadClick = onUploadClick,
+                onProfileClick = onProfileClick,
+                onSearchClick = { /* Đang ở Search */ }
+            )
         },
         containerColor = Color(0xFFF5F5F5)
     ) { paddingValues ->
@@ -75,7 +80,7 @@ fun SearchScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Header Tìm kiếm (Giữ nguyên thiết kế đẹp của bạn)
+            // Header Tìm kiếm
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -125,9 +130,7 @@ fun SearchScreen(
                 )
             }
 
-            // ==========================================
-            // THÊM MỚI: THANH CUỘN NGANG CHỨA CÁC BỘ LỌC
-            // ==========================================
+            // THANH CUỘN NGANG CHỨA CÁC BỘ LỌC
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -218,7 +221,6 @@ fun SearchResultItem(document: Document, onClick: () -> Unit) {
                 ) {
                     Text(text = "Bởi: ${document.authorName}", color = Color.Gray, fontSize = 12.sp)
 
-                    // THÊM MỚI: Hiển thị Loại tài liệu nhỏ nhỏ bên phải
                     val category = if (document.category.isNullOrBlank()) "Tài liệu" else document.category
                     Text(
                         text = category,

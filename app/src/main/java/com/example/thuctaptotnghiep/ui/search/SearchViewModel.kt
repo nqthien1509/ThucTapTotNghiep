@@ -3,22 +3,25 @@ package com.example.thuctaptotnghiep.ui.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.thuctaptotnghiep.data.model.Document
-import com.example.thuctaptotnghiep.data.network.RetrofitClient
+import com.example.thuctaptotnghiep.data.repository.DocumentRepository // Gọi đến kho dữ liệu
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class SearchViewModel : ViewModel() {
+@HiltViewModel // BẮT BUỘC: Báo cho Hilt biết đây là ViewModel cần quản lý
+class SearchViewModel @Inject constructor(
+    private val repository: DocumentRepository // TIÊM REPOSITORY VÀO ĐÂY (Thay vì gọi RetrofitClient)
+) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    // ==========================================
-    // THÊM MỚI: State quản lý Filter Chip (Category)
-    // ==========================================
+    // State quản lý Filter Chip (Category)
     private val _selectedCategory = MutableStateFlow("Tất cả")
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
 
@@ -51,7 +54,7 @@ class SearchViewModel : ViewModel() {
 
     // HÀM XỬ LÝ TÌM KIẾM CHUNG (GỘP CHUNG API)
     private fun executeSearch(withDelay: Boolean) {
-        // HỦY ngay tiến trình tìm kiếm cũ nếu người dùng đang thao tác liên tục
+        // HỦY ngay tiến trình tìm kiếm cũ nếu người dùng đang thao tác liên tục (Debounce)
         searchJob?.cancel()
 
         val currentQuery = _searchQuery.value.trim()
@@ -70,7 +73,7 @@ class SearchViewModel : ViewModel() {
             _isSearching.value = true
             _errorMessage.value = null
 
-            // Nếu đang gõ chữ thì đợi 0.5s xem có gõ tiếp không
+            // Nếu đang gõ chữ thì đợi 0.5s xem có gõ tiếp không để tránh spam API
             if (withDelay) {
                 delay(500)
             }
@@ -79,8 +82,8 @@ class SearchViewModel : ViewModel() {
                 // Nếu chọn "Tất cả" thì gửi 'null' lên Backend để không lọc loại tài liệu
                 val categoryParam = if (currentCategory == "Tất cả") null else currentCategory
 
-                // Gọi API với cả 2 tham số: Chữ và Môn
-                val results = RetrofitClient.apiService.searchDocuments(
+                // SỬA TẠI ĐÂY: Gọi Repository thay vì RetrofitClient
+                val results = repository.searchDocuments(
                     keyword = currentQuery,
                     category = categoryParam
                 )

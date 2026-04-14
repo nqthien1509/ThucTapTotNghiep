@@ -35,7 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel // <-- CẬP NHẬT: Import Hilt ViewModel
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
 import com.google.firebase.auth.FirebaseAuth
 import com.rizzi.bouquet.ResourceType
@@ -45,12 +45,12 @@ import com.rizzi.bouquet.rememberVerticalPdfReaderState
 @Composable
 fun DocumentDetailScreen(
     documentId: String,
-    viewModel: DetailViewModel = viewModel(),
     onBackClick: () -> Unit,
     onHomeClick: () -> Unit,
     onUploadClick: () -> Unit,
     onProfileClick: () -> Unit,
-    onSearchClick: () -> Unit
+    onSearchClick: () -> Unit,
+    viewModel: DocumentDetailViewModel = hiltViewModel() // <-- CẬP NHẬT: Dùng hiltViewModel()
 ) {
     val context = LocalContext.current
     val currentUser = FirebaseAuth.getInstance().currentUser
@@ -151,9 +151,6 @@ fun DocumentDetailScreen(
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            // ==========================================
-                            // ĐÃ SỬA LỖI: DÙNG isNullOrBlank() CHO AN TOÀN
-                            // ==========================================
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
                                     modifier = Modifier.background(Color(0xFFE8F5E9), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp)

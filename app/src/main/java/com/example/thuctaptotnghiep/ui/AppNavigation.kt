@@ -10,7 +10,6 @@ import com.example.thuctaptotnghiep.ui.auth.LoginScreen
 import com.example.thuctaptotnghiep.ui.auth.RegisterScreen
 import com.example.thuctaptotnghiep.ui.detail.DocumentDetailScreen
 import com.example.thuctaptotnghiep.ui.home.HomeScreen
-import com.example.thuctaptotnghiep.ui.management.MyDocumentsScreen
 import com.example.thuctaptotnghiep.ui.profile.ProfileScreen
 import com.example.thuctaptotnghiep.ui.search.SearchScreen
 import com.example.thuctaptotnghiep.ui.upload.UploadScreen
@@ -134,13 +133,6 @@ fun AppNavigation() {
                 onHomeClick = { navigateToBottomTab("home") },
                 onUploadClick = { navigateToBottomTab("upload") },
                 onProfileClick = { navigateToBottomTab("profile") }
-            )
-        }
-
-        // 8. Màn hình phụ: Quản lý tài liệu
-        composable("my_documents") {
-            MyDocumentsScreen(
-                onBackClick = { navController.popBackStack() }
             )
         }
     }

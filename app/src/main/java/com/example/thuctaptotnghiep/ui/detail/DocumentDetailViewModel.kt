@@ -3,13 +3,18 @@ package com.example.thuctaptotnghiep.ui.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.thuctaptotnghiep.data.model.Document
-import com.example.thuctaptotnghiep.data.network.RetrofitClient // Lưu ý đường dẫn import này cho khớp với project của bạn
+import com.example.thuctaptotnghiep.data.repository.DocumentRepository // <-- Import Repository
+import dagger.hilt.android.lifecycle.HiltViewModel // <-- Import Hilt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class DetailViewModel : ViewModel() {
+@HiltViewModel // Đánh dấu cho Hilt biết để tự động quản lý
+class DocumentDetailViewModel @Inject constructor(
+    private val repository: DocumentRepository // TIÊM REPOSITORY VÀO ĐÂY
+) : ViewModel() {
 
     private val _document = MutableStateFlow<Document?>(null)
     val document: StateFlow<Document?> = _document.asStateFlow()
@@ -21,7 +26,7 @@ class DetailViewModel : ViewModel() {
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
     // =======================================================
-    // THÊM MỚI: QUẢN LÝ TRẠNG THÁI NÚT BẤM
+    // QUẢN LÝ TRẠNG THÁI NÚT BẤM
     // =======================================================
     private val _isFavorite = MutableStateFlow(false)
     val isFavorite: StateFlow<Boolean> = _isFavorite.asStateFlow()
@@ -29,19 +34,19 @@ class DetailViewModel : ViewModel() {
     private val _isWatchLater = MutableStateFlow(false)
     val isWatchLater: StateFlow<Boolean> = _isWatchLater.asStateFlow()
 
-    // Cập nhật hàm fetch để nhận thêm userId
+    // Hàm fetch chi tiết tài liệu
     fun fetchDocumentDetail(id: String, userId: String) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
             try {
-                // Truyền userId lên BE để biết user này đã lưu tài liệu chưa
-                val result = RetrofitClient.apiService.getDocumentById(id, userId)
+                // SỬA TẠI ĐÂY: Dùng repository
+                val result = repository.getDocumentById(id, userId)
                 _document.value = result
 
                 // Khởi tạo trạng thái ban đầu cho 2 nút bấm dựa trên data BE trả về
-                _isFavorite.value = result.isFavorite
-                _isWatchLater.value = result.isWatchLater
+                _isFavorite.value = result.isFavorite ?: false
+                _isWatchLater.value = result.isWatchLater ?: false
             } catch (e: Exception) {
                 _errorMessage.value = e.message
             } finally {
@@ -63,9 +68,9 @@ class DetailViewModel : ViewModel() {
             _isFavorite.value = !currentState
 
             try {
-                // Gọi API ngầm dưới background
+                // SỬA TẠI ĐÂY: Dùng repository gọi ngầm dưới background
                 val body = mapOf("userId" to userId)
-                RetrofitClient.apiService.toggleFavorite(documentId, body)
+                repository.toggleFavorite(documentId, body)
             } catch (e: Exception) {
                 // Nếu gọi API thất bại (mất mạng, lỗi server), tự động đảo ngược UI về như cũ
                 _isFavorite.value = currentState
@@ -80,8 +85,9 @@ class DetailViewModel : ViewModel() {
             _isWatchLater.value = !currentState
 
             try {
+                // SỬA TẠI ĐÂY: Dùng repository
                 val body = mapOf("userId" to userId)
-                RetrofitClient.apiService.toggleWatchLater(documentId, body)
+                repository.toggleWatchLater(documentId, body)
             } catch (e: Exception) {
                 _isWatchLater.value = currentState
                 _errorMessage.value = "Lỗi khi cập nhật xem sau: ${e.message}"
