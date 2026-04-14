@@ -1,4 +1,4 @@
-require('dotenv').config(); // <-- CHÚ Ý: Phải luôn nằm ở dòng đầu tiên
+require('dotenv').config(); 
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -8,13 +8,38 @@ const fs = require('fs');
 const amqp = require('amqplib'); 
 const { body, validationResult } = require('express-validator');
 
-// --- THƯ VIỆN BẢO MẬT ---
+// --- THƯ VIỆN BẢO MẬT & LOGGING ---
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const { v4: uuidv4 } = require('uuid');
+const pino = require('pino');
+const pinoHttp = require('pino-http');
 
 const Document = require('./models/Document');
 const User = require('./models/User'); 
+
+// =======================================================
+// 0. KHỞI TẠO LOGGER (PINO)
+// =======================================================
+const logger = pino({
+    level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+    transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
+});
+
+const loggerMiddleware = pinoHttp({
+    logger,
+    genReqId: function (req, res) {
+        // Lấy x-request-id từ Mobile App gửi lên, nếu không có thì tự tạo UUID mới
+        const id = req.headers['x-request-id'] || uuidv4();
+        res.setHeader('X-Request-Id', id);
+        return id;
+    },
+    autoLogging: {
+        // Bỏ qua log cho các route giám sát hệ thống để tránh nhiễu
+        ignore: (req) => req.url === '/health' || req.url === '/ready'
+    }
+});
 
 // =======================================================
 // FIREBASE ADMIN INITIALIZATION
@@ -31,15 +56,18 @@ if (!admin.apps.length) {
 const app = express();
 
 // =======================================================
-// 0. BẢO MẬT & MIDDLEWARE (HARDENING)
+// 1. BẢO MẬT & MIDDLEWARE (HARDENING)
 // =======================================================
 
-// 1. Dùng Helmet để thiết lập các HTTP Headers bảo mật
+// Đặt Logger lên ĐẦU TIÊN để bắt được mọi request
+app.use(loggerMiddleware); 
+
+// Dùng Helmet để thiết lập các HTTP Headers bảo mật
 app.use(helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
-// 2. Cấu hình CORS Whitelist
+// Cấu hình CORS Whitelist
 const whitelist = process.env.NODE_ENV === 'production' 
     ? ['https://domain-thuc-te-cua-ban.com'] 
     : ['http://localhost:3000', 'http://127.0.0.1:3000']; 
@@ -55,7 +83,7 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// 3. Rate Limiting: Chống Spam / DDoS nhẹ
+// Rate Limiting: Chống Spam / DDoS nhẹ
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
     max: 100, 
@@ -67,7 +95,7 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
-// 4. Parse dữ liệu & Static files
+// Parse dữ liệu & Static files
 app.use(express.json({ limit: '50kb' })); 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -87,7 +115,7 @@ const verifyToken = async (req, res, next) => {
         req.user = decodedToken; 
         next();
     } catch (error) {
-        console.error('Lỗi xác thực Firebase Token:', error);
+        req.log.warn({ err: error }, 'Lỗi xác thực Firebase Token');
         return res.status(401).json({ message: 'Unauthorized: Token không hợp lệ hoặc đã hết hạn!' });
     }
 };
@@ -100,32 +128,33 @@ const optionalVerifyToken = async (req, res, next) => {
             const decodedToken = await admin.auth().verifyIdToken(token);
             req.user = decodedToken; 
         } catch (error) {
-            console.error('Token gửi lên không hợp lệ, tiếp tục truy cập ẩn danh.');
+            req.log.debug('Token gửi lên không hợp lệ, tiếp tục truy cập ẩn danh.');
         }
     }
     next(); 
 };
 
 // =======================================================
-// 1. KẾT NỐI DATABASE & RABBITMQ (ĐÃ THÁO HARDCODE)
+// 2. KẾT NỐI DATABASE & RABBITMQ
 // =======================================================
 
 // Lấy chuỗi kết nối từ file .env
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/thuctaptotnghiep_db';
 
 mongoose.connect(MONGO_URI)
-    .then(() => console.log('✅ Đã kết nối thành công với MongoDB!'))
-    .catch((err) => console.error('❌ Lỗi kết nối MongoDB:', err));
+    .then(() => logger.info(' Đã kết nối thành công với MongoDB!'))
+    .catch((err) => logger.fatal({ err }, ' Lỗi kết nối MongoDB'));
 
-// Lấy biến RabbitMQ từ .env và check an toàn
+// Lấy biến RabbitMQ từ .env
 const RABBITMQ_URL = process.env.RABBITMQ_URL;
 
 if (!RABBITMQ_URL) {
-    console.error('❌ CRITICAL ERROR: Thiếu biến môi trường RABBITMQ_URL trong file .env');
-    process.exit(1); // Dừng server ngay lập tức để tránh lỗi ngầm
+    logger.fatal(' CRITICAL ERROR: Thiếu biến môi trường RABBITMQ_URL trong file .env');
+    process.exit(1); 
 }
 
-async function sendToQueue(data) {
+// CẬP NHẬT: Thêm tham số requestId
+async function sendToQueue(data, requestId) {
     try {
         const connection = await amqp.connect(RABBITMQ_URL);
         const channel = await connection.createChannel();
@@ -133,22 +162,25 @@ async function sendToQueue(data) {
 
         await channel.assertQueue(queueName, { durable: true });
         
-        channel.sendToQueue(queueName, Buffer.from(JSON.stringify(data)), {
+        // Gắn thêm Trace ID vào payload
+        const payload = { ...data, requestId: requestId };
+        
+        channel.sendToQueue(queueName, Buffer.from(JSON.stringify(payload)), {
             persistent: true 
         });
 
-        console.log(` [x] Đã gửi Job xử lý file: ${data.title}`);
+        logger.info({ requestId, action: data.action }, `[x] Đã gửi Job xử lý file: ${data.title}`);
         
         setTimeout(() => {
             connection.close();
         }, 500);
     } catch (error) {
-        console.error('❌ Lỗi gửi tin nhắn đến RabbitMQ:', error);
+        logger.error({ requestId, err: error }, ' Lỗi gửi tin nhắn đến RabbitMQ');
     }
 }
 
 // =======================================================
-// 2. CẤU HÌNH LƯU TRỮ FILE (MULTER) 
+// 3. CẤU HÌNH LƯU TRỮ FILE (MULTER) 
 // =======================================================
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -170,17 +202,63 @@ const upload = multer({
 });
 
 // =======================================================
-// 3. HỆ THỐNG API
+// 4. HEALTHCHECK & READINESS ENDPOINTS (Giám sát hệ thống)
+// =======================================================
+
+// Liveness Check
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'UP',
+        uptime: process.uptime(), 
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Readiness Check
+app.get('/ready', async (req, res) => {
+    const isMongoConnected = mongoose.connection.readyState === 1;
+    let isRabbitConnected = false;
+    try {
+        const connection = await amqp.connect(RABBITMQ_URL);
+        isRabbitConnected = true;
+        await connection.close(); 
+    } catch (error) {
+        logger.warn({ err: error.message }, ' [Readiness] Lỗi kết nối RabbitMQ');
+    }
+
+    const isReady = isMongoConnected && isRabbitConnected;
+    const statusCode = isReady ? 200 : 503; 
+
+    res.status(statusCode).json({
+        status: isReady ? 'READY' : 'NOT_READY',
+        services: {
+            mongodb: isMongoConnected ? 'UP' : 'DOWN',
+            rabbitmq: isRabbitConnected ? 'UP' : 'DOWN'
+        },
+        timestamp: new Date().toISOString()
+    });
+});
+
+// =======================================================
+// 5. HỆ THỐNG API CHÍNH
 // =======================================================
 
 // --- API UPLOAD TÀI LIỆU (PDF) ---
 const uploadMiddleware = (req, res, next) => {
     upload.single('file')(req, res, function (err) {
         if (err instanceof multer.MulterError) {
-            if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ message: 'File quá lớn! Dung lượng tối đa là 10MB.' });
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                req.log.warn('Upload bị từ chối do file quá lớn');
+                return res.status(400).json({ message: 'File quá lớn! Dung lượng tối đa là 10MB.' });
+            }
+            req.log.error({ err }, 'Lỗi Multer khi upload');
             return res.status(400).json({ message: 'Lỗi upload: ' + err.message });
         } else if (err) {
-            if (err.message === 'INVALID_TYPE') return res.status(400).json({ message: 'Chỉ cho phép tải lên định dạng file PDF!' });
+            if (err.message === 'INVALID_TYPE') {
+                req.log.warn('Upload bị từ chối do sai định dạng');
+                return res.status(400).json({ message: 'Chỉ cho phép tải lên định dạng file PDF!' });
+            }
+            req.log.error({ err }, 'Lỗi không xác định khi upload');
             return res.status(400).json({ message: err.message });
         }
         next();
@@ -201,10 +279,14 @@ app.post('/api/upload',
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path); 
+            req.log.warn({ errors: errors.array() }, 'Validate text thất bại');
             return res.status(400).json({ message: errors.array()[0].msg, errors: errors.array() });
         }
 
-        if (!req.file) return res.status(400).json({ message: 'Vui lòng chọn một file PDF!' });
+        if (!req.file) {
+            req.log.warn('Không tìm thấy file tải lên');
+            return res.status(400).json({ message: 'Vui lòng chọn một file PDF!' });
+        }
 
         const { title, authorName, subject, category, description, tags } = req.body;
         const tagsArray = tags ? tags.split(',').map(tag => tag.trim()).filter(tag => tag !== "") : [];
@@ -224,21 +306,23 @@ app.post('/api/upload',
 
         await newDoc.save();
 
+        // Truyền req.id (Trace ID) vào hàm queue
         sendToQueue({
             documentId: newDoc._id,
             title: newDoc.title,
             filePath: req.file.path,
             action: 'CHECK_VIRUS_AND_THUMBNAIL',
             authorName: newDoc.authorName 
-        });
+        }, req.id);
 
+        req.log.info({ documentId: newDoc._id }, 'Upload thành công, đã lưu DB và đẩy vào hàng đợi');
         res.status(200).json({ message: 'Tài liệu đã được tải lên và đang chờ hệ thống xử lý ngầm!', document: newDoc });
     } catch (error) {
         next(error);
     }
 });
 
-// --- CÁC API KHÁC (Giữ nguyên logic) ---
+// --- API QUẢN LÝ THÔNG TIN NGƯỜI DÙNG ---
 app.get('/api/user/:uid', async (req, res, next) => {
     try {
         let user = await User.findById(req.params.uid);
@@ -253,7 +337,10 @@ app.get('/api/user/:uid', async (req, res, next) => {
 
 app.put('/api/user/:uid', verifyToken, async (req, res, next) => {
     try {
-        if (req.params.uid !== req.user.uid) return res.status(403).json({ message: "Forbidden: Bạn không có quyền thao tác trên tài khoản người khác!" });
+        if (req.params.uid !== req.user.uid) {
+            req.log.warn({ uidParam: req.params.uid, tokenUid: req.user.uid }, 'Thử nghiệm sửa chéo tài khoản bị chặn');
+            return res.status(403).json({ message: "Forbidden: Bạn không có quyền thao tác trên tài khoản người khác!" });
+        }
         const { email, displayName, school, bio } = req.body;
         const updatedUser = await User.findByIdAndUpdate(req.params.uid, { email, displayName, school, bio }, { new: true, upsert: true });
         res.status(200).json(updatedUser);
@@ -275,18 +362,46 @@ app.post('/api/user/:uid/avatar', verifyToken, upload.single('avatar'), async (r
     }
 });
 
+// --- API TƯƠNG TÁC NGƯỜI DÙNG ---
 app.post('/api/documents/:id/favorite', verifyToken, async (req, res, next) => {
     try {
         const userId = req.user.uid; 
         const doc = await Document.findById(req.params.id);
         if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu!' });
 
-        const index = doc.favoritedBy.indexOf(userId);
-        if (index === -1) doc.favoritedBy.push(userId); 
-        else doc.favoritedBy.splice(index, 1); 
+        // CẬP NHẬT: Dùng updateOne để bỏ qua bước validate toàn bộ file
+        const isFavorited = doc.favoritedBy.includes(userId);
+        if (isFavorited) {
+            await Document.updateOne({ _id: req.params.id }, { $pull: { favoritedBy: userId } });
+            req.log.info({ documentId: req.params.id, userId }, 'Bỏ yêu thích tài liệu');
+        } else {
+            await Document.updateOne({ _id: req.params.id }, { $push: { favoritedBy: userId } });
+            req.log.info({ documentId: req.params.id, userId }, 'Thêm yêu thích tài liệu');
+        }
 
-        await doc.save();
         res.status(200).json({ message: 'Cập nhật trạng thái yêu thích thành công!' });
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.post('/api/documents/:id/watch-later', verifyToken, async (req, res, next) => {
+    try {
+        const userId = req.user.uid; 
+        const doc = await Document.findById(req.params.id);
+        if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu!' });
+
+        // CẬP NHẬT: Dùng updateOne để bỏ qua bước validate toàn bộ file
+        const isWatchLater = doc.watchLaterBy.includes(userId);
+        if (isWatchLater) {
+            await Document.updateOne({ _id: req.params.id }, { $pull: { watchLaterBy: userId } });
+            req.log.info({ documentId: req.params.id, userId }, 'Bỏ xem sau tài liệu');
+        } else {
+            await Document.updateOne({ _id: req.params.id }, { $push: { watchLaterBy: userId } });
+            req.log.info({ documentId: req.params.id, userId }, 'Thêm xem sau tài liệu');
+        }
+
+        res.status(200).json({ message: 'Cập nhật danh sách xem sau thành công!' });
     } catch (error) {
         next(error);
     }
@@ -309,6 +424,7 @@ app.post('/api/documents/:id/watch-later', verifyToken, async (req, res, next) =
     }
 });
 
+// --- API TRUY XUẤT DỮ LIỆU ---
 app.get('/api/documents', async (req, res, next) => {
     try {
         const documents = await Document.find().sort({ uploadDate: -1 });
@@ -361,6 +477,7 @@ app.get('/api/my-documents/:authorName', async (req, res, next) => {
     }
 });
 
+// --- API LẤY DANH SÁCH ĐÃ LƯU ---
 app.get('/api/users/:userId/favorites', verifyToken, async (req, res, next) => {
     try {
         if (req.params.userId !== req.user.uid) return res.status(403).json({ message: "Forbidden: Bạn không có quyền xem dữ liệu của người khác!" });
@@ -381,6 +498,7 @@ app.get('/api/users/:userId/watch-later', verifyToken, async (req, res, next) =>
     }
 });
 
+// --- XÓA TÀI LIỆU ---
 app.delete('/api/documents/:id', async (req, res, next) => {
     try {
         const doc = await Document.findById(req.params.id);
@@ -390,19 +508,21 @@ app.delete('/api/documents/:id', async (req, res, next) => {
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         
         await Document.findByIdAndDelete(req.params.id);
+        req.log.info({ documentId: req.params.id }, 'Đã xóa tài liệu');
         res.status(200).json({ message: 'Xóa thành công!' });
     } catch (error) {
         next(error);
     }
 });
 
-app.get('/', (req, res) => res.send('Backend App Tài Liệu - Được bảo vệ toàn diện'));
+app.get('/', (req, res) => res.send('Backend App Tài Liệu - API Server Bảo Mật'));
 
 // =======================================================
 // GLOBAL ERROR HANDLER
 // =======================================================
 app.use((err, req, res, next) => {
-    console.error('🔥 [LỖI HỆ THỐNG]:', err);
+    // Dùng logger thay cho console.error
+    req.log.error({ err }, ' [LỖI HỆ THỐNG UNHANDLED]');
 
     const statusCode = err.status || 500;
     let responseMessage = err.message;
@@ -421,10 +541,10 @@ app.use((err, req, res, next) => {
 });
 
 // =======================================================
-// KHỞI ĐỘNG SERVER (Lấy PORT từ .env)
+// KHỞI ĐỘNG SERVER 
 // =======================================================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
-    console.log(`🌍 Chế độ: ${process.env.NODE_ENV}`);
+    logger.info(` Server đang chạy tại http://localhost:${PORT}`);
+    logger.info(` Chế độ: ${process.env.NODE_ENV || 'development'}`);
 });
