@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # 1. DATABASE MONGODB
+  mongodb:
+    image: mongo:latest
+    container_name: thuctap_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db # Lưu dữ liệu DB ra ngoài để tắt máy không bị mất
+    restart: unless-stopped
+
+  # 2. MESSAGE QUEUE RABBITMQ (Bản management có giao diện Web)
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: thuctap_rabbitmq
+    ports:
+      - "5672:5672"   # Port giao tiếp với code Node.js
+      - "15672:15672" # Port cho giao diện Web quản lý
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: secretpassword
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: unless-stopped
+
+  # 3. BACKEND API SERVER
+  api:
+    build: . # Build từ Dockerfile hiện tại
+    container_name: thuctap_api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      # LƯU Ý: Trong mạng lưới Docker, ta gọi tên service 'mongodb' và 'rabbitmq' thay vì localhost
+      - MONGO_URI=mongodb://mongodb:27017/thuctaptotnghiep_db
+      - RABBITMQ_URL=amqp://admin:secretpassword@rabbitmq:5672
+    volumes:
+      # Đồng bộ thư mục uploads giữa máy tính thật và container
+      - ./uploads:/usr/src/app/uploads 
+    depends_on:
+      - mongodb
+      - rabbitmq
+    restart: unless-stopped
+
+  # 4. BACKGROUND WORKER
+  worker:
+    build: .
+    container_name: thuctap_worker
+    command: node worker.js # Ghi đè lệnh CMD của Dockerfile để chạy Worker
+    environment:
+      - NODE_ENV=production
+      - MONGO_URI=mongodb://mongodb:27017/thuctaptotnghiep_db
+      - RABBITMQ_URL=amqp://admin:secretpassword@rabbitmq:5672
+    volumes:
+      - ./uploads:/usr/src/app/uploads
+    depends_on:
+      - mongodb
+      - rabbitmq
+    restart: unless-stopped
+
+# Khai báo ổ cứng ảo (Volumes) để dữ liệu tồn tại vĩnh viễn
+volumes:
+  mongodb_data:
+  rabbitmq_data:

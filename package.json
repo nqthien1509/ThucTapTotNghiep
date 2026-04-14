@@ -13,10 +13,19 @@
   "dependencies": {
     "amqplib": "^1.0.3",
     "cors": "^2.8.6",
-    "dotenv": "^17.4.0",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "firebase-admin": "^13.7.0",
+    "express-rate-limit": "^8.3.2",
+    "express-validator": "^7.3.2",
+    "firebase-admin": "^13.8.0",
+    "helmet": "^8.1.0",
     "mongoose": "^9.4.1",
-    "multer": "^2.1.1"
+    "multer": "^2.1.1",
+    "pino": "^10.3.1",
+    "pino-http": "^11.0.0",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "pino-pretty": "^13.1.3"
   }
 }

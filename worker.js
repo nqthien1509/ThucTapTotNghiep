@@ -1,30 +1,51 @@
+require('dotenv').config();
+
 const amqp = require('amqplib');
 const mongoose = require('mongoose');
 const Document = require('./models/Document');
 const admin = require('firebase-admin');
 
 // =======================================================
-// 1. CẤU HÌNH FIREBASE ADMIN
+// 0. KHỞI TẠO LOGGER (PINO)
 // =======================================================
-// Lưu ý: Đừng push file firebase-key.json này lên GitHub nhé!
-const serviceAccount = require('./firebase-key.json');
-
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+const pino = require('pino');
+const logger = pino({
+    level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+    transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
 });
 
 // =======================================================
-// 2. KẾT NỐI MONGODB
+// 1. CẤU HÌNH FIREBASE ADMIN
 // =======================================================
-mongoose.connect('mongodb://127.0.0.1:27017/thuctaptotnghiep_db')
-    .then(() => console.log('✅ Worker đã kết nối MongoDB thành công!'))
+const serviceAccount = require('./firebase-key.json');
+
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+    });
+}
+
+// =======================================================
+// 2. KẾT NỐI MONGODB (Dùng biến môi trường)
+// =======================================================
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/thuctaptotnghiep_db';
+
+mongoose.connect(MONGO_URI)
+    .then(() => logger.info(' Worker đã kết nối MongoDB thành công!'))
     .catch(err => {
-        console.error('❌ Worker lỗi kết nối MongoDB:', err);
-        process.exit(1); // Dừng worker nếu không kết nối được DB
+        logger.fatal({ err }, ' Worker lỗi kết nối MongoDB');
+        process.exit(1); 
     });
 
-// Link CloudAMQP (Nên đưa vào file .env trong thực tế)
-const RABBITMQ_URL = 'amqps://bkrezbsn:livqe0OmRbzLY_FxiDPV0n6nGmzooxO4@cougar.rmq.cloudamqp.com/bkrezbsn';
+// =======================================================
+// 3. KẾT NỐI RABBITMQ VÀ XỬ LÝ JOB
+// =======================================================
+const RABBITMQ_URL = process.env.RABBITMQ_URL;
+
+if (!RABBITMQ_URL) {
+    logger.fatal(' CRITICAL ERROR: Thiếu biến môi trường RABBITMQ_URL trong file .env');
+    process.exit(1);
+}
 
 async function startWorker() {
     try {
@@ -37,67 +58,68 @@ async function startWorker() {
         // Chỉ nhận 1 job mỗi lần, làm xong mới nhận tiếp
         channel.prefetch(1);
 
-        console.log(' [*] Worker đã sẵn sàng. Đang chờ file mới từ sinh viên UTC...');
+        logger.info(' [*] Worker đã sẵn sàng. Đang chờ file mới...');
 
         channel.consume(queueName, async (msg) => {
             if (msg !== null) {
                 const data = JSON.parse(msg.content.toString());
-                console.log(`\n [v] Nhận Job cho ID: ${data.documentId} - Tên: ${data.title}`);
                 
-                // GIẢ LẬP XỬ LÝ NẶNG (Quét virus, tạo thumbnail...)
-                console.log(' --- Hệ thống đang quét Virus và phân tích dữ liệu PDF... ---');
+                // BÓC TÁCH TRACE ID (requestId) TỪ PAYLOAD
+                const { documentId, title, authorName, requestId } = data; 
+
+                // Gắn requestId vào mọi dòng log của job này
+                logger.info({ requestId, documentId }, `[v] Nhận Job xử lý tài liệu: ${title}`);
+                logger.debug({ requestId, documentId }, '--- Hệ thống đang giả lập quét Virus và phân tích PDF... ---');
+                
+                // GIẢ LẬP XỬ LÝ NẶNG
                 await new Promise(resolve => setTimeout(resolve, 7000)); 
 
                 try {
                     // CẬP NHẬT TRẠNG THÁI VÀO DATABASE
                     const updatedDoc = await Document.findByIdAndUpdate(
-                        data.documentId, 
+                        documentId, 
                         { status: 'verified' },
-                        // ĐÃ SỬA: Dùng returnDocument: 'after' để fix triệt để cảnh báo của Mongoose
                         { returnDocument: 'after' } 
                     );
 
                     if (updatedDoc) {
-                        console.log(` [OK] Đã xác thực thành công tài liệu: ${data.title}`);
+                        logger.info({ requestId, documentId }, `[OK] Đã xác thực thành công tài liệu: ${title}`);
 
                         // =======================================================
                         // GỬI THÔNG BÁO PUSH NOTIFICATION (FCM)
                         // =======================================================
-                        if (data.authorName) {
-                            // Tạo topic name, ví dụ: user_Thien
-                            const topicName = `user_${data.authorName.replace(/\s+/g, '')}`;
+                        if (authorName) {
+                            const topicName = `user_${authorName.replace(/\s+/g, '')}`;
                             
                             const message = {
                                 notification: {
-                                    title: 'Kiểm duyệt hoàn tất! ✅',
-                                    body: `Tài liệu "${data.title}" của bạn đã an toàn và sẵn sàng để chia sẻ.`
+                                    title: 'Kiểm duyệt hoàn tất! ',
+                                    body: `Tài liệu "${title}" của bạn đã an toàn và sẵn sàng để chia sẻ.`
                                 },
                                 data: {
-                                    documentId: data.documentId.toString(),
+                                    documentId: documentId.toString(),
                                     action: 'OPEN_DOCUMENT_DETAIL'
                                 },
                                 topic: topicName
                             };
 
-                            // Thực hiện bắn thông báo
                             await admin.messaging().send(message);
-                            console.log(` [📢] Đã gửi thông báo thành công đến topic: ${topicName}`);
+                            logger.info({ requestId, documentId, topicName }, `[] Đã gửi thông báo thành công đến topic: ${topicName}`);
                         }
                     } else {
-                        console.log(` [!] Không tìm thấy tài liệu ID ${data.documentId} để cập nhật.`);
+                        logger.warn({ requestId, documentId }, `[!] Không tìm thấy tài liệu ID ${documentId} để cập nhật.`);
                     }
                 } catch (dbError) {
-                    console.error(' ❌ Lỗi xử lý dữ liệu DB hoặc FCM:', dbError.message);
+                    logger.error({ requestId, documentId, err: dbError }, ' Lỗi xử lý dữ liệu DB hoặc gửi thông báo FCM');
                 } finally {
                     // Báo cho RabbitMQ biết đã xong để xóa tin nhắn khỏi hàng đợi
-                    // Đặt trong finally để đảm bảo job lỗi hay thành công đều được gỡ khỏi queue, tránh kẹt hàng đợi
                     channel.ack(msg);
                 }
             }
         });
 
     } catch (error) {
-        console.error('❌ Lỗi kết nối RabbitMQ:', error);
+        logger.error({ err: error }, ' Lỗi kết nối RabbitMQ. Đang thử lại...');
         // Tự động thử kết nối lại sau 5 giây nếu rớt mạng
         setTimeout(startWorker, 5000);
     }
