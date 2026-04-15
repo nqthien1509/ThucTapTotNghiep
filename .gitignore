@@ -1,15 +1,20 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+# Bỏ qua các file cấu hình máy tính cá nhân
 local.properties
+# Bỏ qua các thư mục build và cache của Gradle (rất nặng)
+.gradle/
+*/build/
+build/
+# Bỏ qua các file cấu hình của Android Studio (tránh xung đột khi người khác tải về)
+.idea/
+*.iml
+.cxx/
+# Bỏ qua các file cài đặt (App đã đóng gói)
+*.apk
+*.ap_
+*.aab
+# Bỏ qua các file bảo mật (Chữ ký ứng dụng)
+*.jks
+*.keystore
+keystore.properties
+# Bỏ qua file hệ điều hành sinh ra (như máy Mac)
+.DS_Store

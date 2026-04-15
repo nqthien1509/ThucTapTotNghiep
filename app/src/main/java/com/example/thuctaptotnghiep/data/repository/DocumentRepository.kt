@@ -1,7 +1,7 @@
 package com.example.thuctaptotnghiep.data.repository
 
 import com.example.thuctaptotnghiep.data.model.Document
-import com.example.thuctaptotnghiep.data.model.User // Bắt buộc phải import Model User
+import com.example.thuctaptotnghiep.data.model.User
 import com.example.thuctaptotnghiep.data.network.ApiService
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -13,8 +13,13 @@ class DocumentRepository @Inject constructor(
     private val apiService: ApiService
 ) {
     // ==========================================
-    // 1. HÀM UPLOAD TÀI LIỆU (Dành cho UploadViewModel)
+    // 1. TÀI LIỆU CHUNG (Dành cho Home & Upload)
     // ==========================================
+
+    suspend fun getAllDocuments(): List<Document> {
+        return apiService.getDocuments()
+    }
+
     suspend fun uploadDocument(
         file: MultipartBody.Part,
         title: RequestBody,
@@ -25,34 +30,43 @@ class DocumentRepository @Inject constructor(
         tags: RequestBody
     ): Any {
         return apiService.uploadDocument(
-            file = file,
-            title = title,
-            authorName = authorName,
-            subject = subject,
-            category = category,
-            description = description,
-            tags = tags
+            file, title, authorName, subject, category, description, tags
         )
     }
 
     // ==========================================
-    // 2. HÀM TÌM KIẾM TÀI LIỆU (Dành cho SearchViewModel)
+    // 2. TÌM KIẾM (Dành cho SearchViewModel)
     // ==========================================
-    suspend fun searchDocuments(
-        keyword: String,
-        category: String?
-    ): List<Document> {
-        return apiService.searchDocuments(
-            keyword = keyword,
-            category = category
-        )
+    suspend fun searchDocuments(keyword: String, category: String?): List<Document> {
+        return apiService.searchDocuments(keyword, category)
     }
 
     // ==========================================
-    // 3. QUẢN LÝ DANH SÁCH CÁ NHÂN (Dành cho ProfileViewModel)
+    // 3. CHI TIẾT & TƯƠNG TÁC (Dành cho DetailViewModel)
     // ==========================================
-    suspend fun getMyDocuments(authorName: String): List<Document> {
-        return apiService.getMyDocuments(authorName)
+
+    // Đã xóa userId vì Backend tự lấy từ Token
+    suspend fun getDocumentById(id: String): Document {
+        return apiService.getDocumentById(id)
+    }
+
+    // Đã xóa Map body vì Backend tự lấy userId từ Token
+    suspend fun toggleFavorite(documentId: String) {
+        apiService.toggleFavorite(documentId)
+    }
+
+    // Đã xóa Map body vì Backend tự lấy userId từ Token
+    suspend fun toggleWatchLater(documentId: String) {
+        apiService.toggleWatchLater(documentId)
+    }
+
+    // ==========================================
+    // 4. DANH SÁCH CÁ NHÂN & QUẢN LÝ (Dành cho ProfileViewModel)
+    // ==========================================
+
+    // Đã xóa authorName để bảo mật, Backend tự định danh qua Token
+    suspend fun getMyDocuments(): List<Document> {
+        return apiService.getMyDocuments()
     }
 
     suspend fun getFavoriteDocuments(userId: String): List<Document> {
@@ -68,7 +82,7 @@ class DocumentRepository @Inject constructor(
     }
 
     // ==========================================
-    // 4. QUẢN LÝ THÔNG TIN NGƯỜI DÙNG (Dành cho ProfileViewModel)
+    // 5. THÔNG TIN NGƯỜI DÙNG (Dành cho ProfileViewModel)
     // ==========================================
     suspend fun getUserProfile(uid: String): User {
         return apiService.getUserProfile(uid)
@@ -80,25 +94,5 @@ class DocumentRepository @Inject constructor(
 
     suspend fun uploadAvatar(uid: String, file: MultipartBody.Part): User {
         return apiService.uploadAvatar(uid, file)
-    }
-    // ==========================================
-    // LẤY TẤT CẢ TÀI LIỆU (Dành cho HomeViewModel)
-    // ==========================================
-    suspend fun getAllDocuments(): List<Document> {
-        return apiService.getDocuments()
-    }
-    // ==========================================
-    // 5. CHI TIẾT & TƯƠNG TÁC TÀI LIỆU (Dành cho DocumentDetailViewModel)
-    // ==========================================
-    suspend fun getDocumentById(id: String, userId: String): Document {
-        return apiService.getDocumentById(id, userId)
-    }
-
-    suspend fun toggleFavorite(documentId: String, body: Map<String, String>) {
-        apiService.toggleFavorite(documentId, body)
-    }
-
-    suspend fun toggleWatchLater(documentId: String, body: Map<String, String>) {
-        apiService.toggleWatchLater(documentId, body)
     }
 }

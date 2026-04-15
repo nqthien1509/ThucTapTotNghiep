@@ -6,10 +6,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.thuctaptotnghiep.data.model.Document
 import com.example.thuctaptotnghiep.data.model.User
-import com.example.thuctaptotnghiep.data.repository.DocumentRepository // Gọi Repository
+import com.example.thuctaptotnghiep.data.repository.DocumentRepository
 import com.example.thuctaptotnghiep.utils.UserManager
 import com.google.firebase.auth.FirebaseAuth
-import dagger.hilt.android.lifecycle.HiltViewModel // Bắt buộc cho Hilt
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,9 +22,9 @@ import java.io.File
 import java.io.FileOutputStream
 import javax.inject.Inject
 
-@HiltViewModel // Khai báo ViewModel được Hilt quản lý
+@HiltViewModel
 class ProfileViewModel @Inject constructor(
-    private val repository: DocumentRepository // TIÊM REPOSITORY VÀO ĐÂY
+    private val repository: DocumentRepository
 ) : ViewModel() {
 
     // =======================================================
@@ -71,7 +71,7 @@ class ProfileViewModel @Inject constructor(
     }
 
     // =======================================================
-    // 4. CÁC HÀM XỬ LÝ (SỬ DỤNG REPOSITORY THAY VÌ RETROFITCLIENT)
+    // 4. CÁC HÀM XỬ LÝ
     // =======================================================
 
     fun loadAllProfileData() {
@@ -79,7 +79,8 @@ class ProfileViewModel @Inject constructor(
             _isLoading.value = true
             _errorMessage.value = null
             try {
-                val myDocsDeferred = async { repository.getMyDocuments(userName) }
+                // CẬP NHẬT: Xóa tham số userName ở hàm getMyDocuments() vì đã bị loại bỏ ở Repository
+                val myDocsDeferred = async { repository.getMyDocuments() }
                 val favDocsDeferred = async { repository.getFavoriteDocuments(userId) }
                 val watchDocsDeferred = async { repository.getWatchLaterDocuments(userId) }
 
@@ -100,7 +101,8 @@ class ProfileViewModel @Inject constructor(
             _isRefreshing.value = true
             _errorMessage.value = null
             try {
-                val myDocsDeferred = async { repository.getMyDocuments(userName) }
+                // CẬP NHẬT: Xóa tham số userName ở đây luôn
+                val myDocsDeferred = async { repository.getMyDocuments() }
                 val favDocsDeferred = async { repository.getFavoriteDocuments(userId) }
                 val watchDocsDeferred = async { repository.getWatchLaterDocuments(userId) }
 
