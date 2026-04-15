@@ -35,9 +35,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
-import com.google.firebase.auth.FirebaseAuth
 import com.rizzi.bouquet.ResourceType
 import com.rizzi.bouquet.VerticalPDFReader
 import com.rizzi.bouquet.rememberVerticalPdfReaderState
@@ -45,16 +44,17 @@ import com.rizzi.bouquet.rememberVerticalPdfReaderState
 @Composable
 fun DocumentDetailScreen(
     documentId: String,
-    viewModel: DetailViewModel = viewModel(),
     onBackClick: () -> Unit,
     onHomeClick: () -> Unit,
     onUploadClick: () -> Unit,
     onProfileClick: () -> Unit,
-    onSearchClick: () -> Unit
+    onSearchClick: () -> Unit,
+    viewModel: DocumentDetailViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val currentUser = FirebaseAuth.getInstance().currentUser
-    val currentUserId = currentUser?.uid ?: "default_id"
+
+    // CẬP NHẬT: Đã xóa FirebaseAuth và currentUserId vì Hilt và Backend tự lo phần danh tính!
+
     val document by viewModel.document.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
@@ -66,7 +66,8 @@ fun DocumentDetailScreen(
 
     LaunchedEffect(documentId) {
         if (documentId.isNotEmpty()) {
-            viewModel.fetchDocumentDetail(documentId, currentUserId)
+            // CẬP NHẬT: Chỉ truyền documentId
+            viewModel.fetchDocumentDetail(documentId)
         }
     }
 
@@ -137,10 +138,12 @@ fun DocumentDetailScreen(
                                 Text(text = doc.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(onClick = { viewModel.toggleWatchLater(doc.id, currentUserId) }) {
+                                    // CẬP NHẬT: Chỉ truyền doc.id
+                                    IconButton(onClick = { viewModel.toggleWatchLater(doc.id) }) {
                                         Icon(imageVector = if (isWatchLater) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, contentDescription = "Xem sau", tint = if (isWatchLater) Color(0xFF4C9EEB) else Color.Gray)
                                     }
-                                    IconButton(onClick = { viewModel.toggleFavorite(doc.id, currentUserId) }) {
+                                    // CẬP NHẬT: Chỉ truyền doc.id
+                                    IconButton(onClick = { viewModel.toggleFavorite(doc.id) }) {
                                         Icon(imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, contentDescription = "Yêu thích", tint = if (isFavorite) Color.Red else Color.Gray)
                                     }
                                     IconButton(onClick = { /* TODO: Xử lý share link */ }) {
@@ -151,9 +154,6 @@ fun DocumentDetailScreen(
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            // ==========================================
-                            // ĐÃ SỬA LỖI: DÙNG isNullOrBlank() CHO AN TOÀN
-                            // ==========================================
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
                                     modifier = Modifier.background(Color(0xFFE8F5E9), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp)

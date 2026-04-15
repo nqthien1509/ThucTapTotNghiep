@@ -1,6 +1,5 @@
 package com.example.thuctaptotnghiep.ui.upload
 
-import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.widget.Toast
@@ -27,22 +26,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.thuctaptotnghiep.data.network.RetrofitClient
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
 import com.google.firebase.auth.FirebaseAuth
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.asRequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.File
-import java.io.FileOutputStream
 
 @Composable
 fun UploadScreen(
@@ -50,33 +39,55 @@ fun UploadScreen(
     onHomeClick: () -> Unit,
     onUploadClick: () -> Unit,
     onProfileClick: () -> Unit,
-    onSearchClick: () -> Unit
+    onSearchClick: () -> Unit,
+    viewModel: UploadViewModel = hiltViewModel() // Bơm ViewModel vào bằng Hilt
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
 
-    // --- STATE QUẢN LÝ FILE ---
+    // --- LẮNG NGHE TRẠNG THÁI TỪ VIEWMODEL ---
+    val uploadState by viewModel.uploadState.collectAsState()
+
+    // --- STATE QUẢN LÝ FILE VÀ FORM ---
     var selectedFileName by remember { mutableStateOf<String?>(null) }
     var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
-    var isUploading by remember { mutableStateOf(false) }
 
-    // --- STATE CHO CÁC TRƯỜNG DỮ LIỆU MỚI ---
     var customTitle by remember { mutableStateOf("") }
-
-    // CẬP NHẬT: Biến state đơn giản cho Môn học (thay cho Dropdown)
     var subject by remember { mutableStateOf("") }
-
     var description by remember { mutableStateOf("") }
     var tags by remember { mutableStateOf("") }
 
     val categories = listOf("Slide", "Đề thi", "Giáo trình")
     var selectedCategory by remember { mutableStateOf(categories[0]) }
 
+    // --- XỬ LÝ TOAST THÔNG BÁO TỪ TRẠNG THÁI ---
+    LaunchedEffect(uploadState) {
+        when (uploadState) {
+            is UploadState.Success -> {
+                Toast.makeText(context, "Tải lên thành công rực rỡ!", Toast.LENGTH_SHORT).show()
+                // Reset form sau khi upload xong
+                selectedFileName = null
+                selectedFileUri = null
+                customTitle = ""
+                subject = ""
+                description = ""
+                tags = ""
+                viewModel.resetState() // Trả về trạng thái Idle chờ lượt upload tiếp
+            }
+            is UploadState.Error -> {
+                val errorMessage = (uploadState as UploadState.Error).message
+                Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
+                viewModel.resetState()
+            }
+            else -> {}
+        }
+    }
+
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
             selectedFileUri = it
+            // Lấy tên file tạm thời để hiển thị (Logic lấy tên thật được đưa xuống dưới)
             val name = getFileName(context, it)
             selectedFileName = name
             if (customTitle.isBlank() && name != null) {
@@ -141,7 +152,7 @@ fun UploadScreen(
                         .fillMaxWidth()
                         .height(180.dp)
                         .background(Color(0xFFEBE1E1), RoundedCornerShape(16.dp))
-                        .clickable { if (!isUploading) filePickerLauncher.launch("application/pdf") },
+                        .clickable { if (uploadState !is UploadState.Loading) filePickerLauncher.launch("application/pdf") },
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
@@ -161,7 +172,7 @@ fun UploadScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(selectedFileName!!, fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Spacer(modifier = Modifier.height(16.dp))
-                            if (!isUploading) {
+                            if (uploadState !is UploadState.Loading) {
                                 TextButton(onClick = { selectedFileName = null; selectedFileUri = null; customTitle = "" }) {
                                     Text("Đổi file khác", color = Color.Red)
                                 }
@@ -178,17 +189,20 @@ fun UploadScreen(
                     // ==========================================
                     OutlinedTextField(
                         value = customTitle,
-                        onValueChange = { customTitle = it },
+                        onValueChange = {
+                            if (it.length <= 100) customTitle = it
+                        },
                         label = { Text("Tiêu đề tài liệu *") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // CẬP NHẬT: Ô nhập liệu Môn học dạng chữ
                     OutlinedTextField(
                         value = subject,
-                        onValueChange = { subject = it },
+                        onValueChange = {
+                            if (it.length <= 50) subject = it
+                        },
                         label = { Text("Môn học *") },
                         placeholder = { Text("VD: Toán cao cấp, Lập trình Android...") },
                         modifier = Modifier.fillMaxWidth(),
@@ -218,7 +232,9 @@ fun UploadScreen(
 
                     OutlinedTextField(
                         value = description,
-                        onValueChange = { description = it },
+                        onValueChange = {
+                            if (it.length <= 500) description = it
+                        },
                         label = { Text("Mô tả nội dung") },
                         modifier = Modifier.fillMaxWidth().height(100.dp),
                         maxLines = 3
@@ -241,63 +257,32 @@ fun UploadScreen(
                     // ==========================================
                     Button(
                         onClick = {
-                            // CẬP NHẬT: Kiểm tra thêm điều kiện người dùng phải nhập Môn học
                             if (customTitle.isBlank() || subject.isBlank() || selectedFileUri == null) {
                                 Toast.makeText(context, "Vui lòng nhập đủ Tiêu đề, Môn học và chọn file!", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
 
-                            isUploading = true
-                            coroutineScope.launch {
-                                try {
-                                    val tempFile = uriToFile(context, selectedFileUri!!)
-                                    if (tempFile != null) {
-                                        val requestFile = tempFile.asRequestBody("application/pdf".toMediaTypeOrNull())
-                                        val body = MultipartBody.Part.createFormData("file", tempFile.name, requestFile)
+                            val currentUser = FirebaseAuth.getInstance().currentUser
+                            val actualAuthorName = currentUser?.displayName ?: "Người dùng ẩn danh"
 
-                                        val currentUser = FirebaseAuth.getInstance().currentUser
-                                        val actualAuthorName = currentUser?.displayName ?: "Người dùng ẩn danh"
-
-                                        val titlePart = customTitle.toRequestBody("text/plain".toMediaTypeOrNull())
-                                        val authorPart = actualAuthorName.toRequestBody("text/plain".toMediaTypeOrNull())
-
-                                        // Dùng biến subject gõ tay truyền vào API
-                                        val subjectPart = subject.toRequestBody("text/plain".toMediaTypeOrNull())
-
-                                        val categoryPart = selectedCategory.toRequestBody("text/plain".toMediaTypeOrNull())
-                                        val descriptionPart = description.toRequestBody("text/plain".toMediaTypeOrNull())
-                                        val tagsPart = tags.toRequestBody("text/plain".toMediaTypeOrNull())
-
-                                        // Gọi API
-                                        RetrofitClient.apiService.uploadDocument(
-                                            body, titlePart, authorPart, subjectPart, categoryPart, descriptionPart, tagsPart
-                                        )
-
-                                        Toast.makeText(context, "Tải lên thành công rực rỡ!", Toast.LENGTH_SHORT).show()
-
-                                        // Reset form
-                                        selectedFileName = null
-                                        selectedFileUri = null
-                                        customTitle = ""
-                                        subject = ""
-                                        description = ""
-                                        tags = ""
-                                    } else {
-                                        Toast.makeText(context, "Không thể đọc file", Toast.LENGTH_SHORT).show()
-                                    }
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "Lỗi kết nối Server: ${e.message}", Toast.LENGTH_LONG).show()
-                                } finally {
-                                    isUploading = false
-                                }
-                            }
+                            // GIAO VIỆC CHO VIEWMODEL LÀM
+                            viewModel.uploadDocument(
+                                context = context,
+                                uri = selectedFileUri!!,
+                                title = customTitle,
+                                authorName = actualAuthorName,
+                                subject = subject,
+                                category = selectedCategory,
+                                description = description,
+                                tags = tags
+                            )
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
-                        enabled = !isUploading,
+                        enabled = uploadState !is UploadState.Loading, // Khóa nút khi đang tải
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6FB1F0))
                     ) {
-                        if (isUploading) {
+                        if (uploadState is UploadState.Loading) {
                             CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                             Spacer(modifier = Modifier.width(12.dp))
                             Text("ĐANG TẢI LÊN...", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -313,7 +298,8 @@ fun UploadScreen(
     }
 }
 
-fun getFileName(context: Context, uri: Uri): String? {
+// Hàm lấy tên file để hiển thị trên UI
+fun getFileName(context: android.content.Context, uri: Uri): String? {
     var result: String? = null
     if (uri.scheme == "content") {
         val cursor = context.contentResolver.query(uri, null, null, null, null)
@@ -330,22 +316,4 @@ fun getFileName(context: Context, uri: Uri): String? {
         if (cut != -1) result = result?.substring(cut + 1)
     }
     return result
-}
-
-suspend fun uriToFile(context: Context, uri: Uri): File? = withContext(Dispatchers.IO) {
-    val contentResolver = context.contentResolver
-    val fileName = getFileName(context, uri) ?: "temp_pdf_file.pdf"
-    val tempFile = File(context.cacheDir, fileName)
-
-    try {
-        val inputStream = contentResolver.openInputStream(uri)
-        val outputStream = FileOutputStream(tempFile)
-        inputStream?.copyTo(outputStream)
-        inputStream?.close()
-        outputStream.close()
-        return@withContext tempFile
-    } catch (e: Exception) {
-        e.printStackTrace()
-        return@withContext null
-    }
 }

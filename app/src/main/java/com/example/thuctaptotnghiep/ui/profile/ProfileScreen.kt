@@ -31,7 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel // <-- CẬP NHẬT: Import Hilt
 import coil.compose.AsyncImage
 import com.example.thuctaptotnghiep.data.model.Document
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
@@ -40,12 +40,12 @@ import com.google.firebase.auth.FirebaseAuth
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
-    viewModel: ProfileViewModel = viewModel(),
     onBackClick: () -> Unit,
     onLogoutClick: () -> Unit,
     onSearchClick: () -> Unit,
     onUploadClick: () -> Unit,
-    onDocumentClick: (String) -> Unit
+    onDocumentClick: (String) -> Unit,
+    viewModel: ProfileViewModel = hiltViewModel() // <-- CẬP NHẬT: Dùng hiltViewModel() và đưa xuống cuối
 ) {
     val context = LocalContext.current
 
@@ -137,7 +137,7 @@ fun ProfileScreen(
                     val displayUserName = userProfile?.displayName?.takeIf { it.isNotBlank() } ?: viewModel.userName
                     val displaySchool = userProfile?.school?.takeIf { it.isNotBlank() } ?: "Sinh viên UTH"
 
-                    // Khung ảnh ở ngoài màn hình chính (Đã gỡ bỏ hiệu ứng Click)
+                    // Khung ảnh
                     Box(
                         modifier = Modifier
                             .size(70.dp)
@@ -312,7 +312,7 @@ fun ProfileScreen(
         }
 
         // =======================================================
-        // DIALOG: CHỈNH SỬA THÔNG TIN CÁ NHÂN (CÓ AVATAR Ở ĐÂY)
+        // DIALOG: CHỈNH SỬA THÔNG TIN CÁ NHÂN
         // =======================================================
         if (showEditProfileDialog) {
             val fallbackEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
@@ -329,18 +329,15 @@ fun ProfileScreen(
                 text = {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally // Căn giữa nội dung
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // ---------------------------------------------
-                        // KHU VỰC THAY ĐỔI ẢNH ĐẠI DIỆN TRONG DIALOG
-                        // ---------------------------------------------
+                        // Khu vực đổi ảnh đại diện
                         Box(
                             modifier = Modifier
                                 .size(80.dp)
                                 .background(Color(0xFFE3F2FD), CircleShape)
                                 .clip(CircleShape)
                                 .clickable {
-                                    // Bấm vào đây sẽ mở Album ảnh
                                     photoPickerLauncher.launch(
                                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                     )
@@ -364,7 +361,6 @@ fun ProfileScreen(
                                 )
                             }
 
-                            // Icon Camera nhỏ đè lên góc phải dưới để người dùng dễ nhận biết
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
@@ -384,9 +380,7 @@ fun ProfileScreen(
                         Text(text = "Chạm để thay đổi ảnh", fontSize = 12.sp, color = Color.Gray)
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // ---------------------------------------------
-                        // CÁC Ô NHẬP LIỆU
-                        // ---------------------------------------------
+                        // Các ô nhập liệu
                         OutlinedTextField(
                             value = editName,
                             onValueChange = { editName = it },

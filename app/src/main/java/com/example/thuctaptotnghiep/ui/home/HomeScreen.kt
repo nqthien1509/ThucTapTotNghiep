@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox // <-- THÊM TÍNH NĂNG PULL TO REFRESH
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,30 +23,30 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage // <-- IMPORT THƯ VIỆN COIL
+import androidx.hilt.navigation.compose.hiltViewModel // <-- CẬP NHẬT IMPORT HILT
+import coil.compose.AsyncImage
 import com.example.thuctaptotnghiep.data.model.Document
 import com.example.thuctaptotnghiep.data.model.User
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
-import com.example.thuctaptotnghiep.utils.UserManager // <-- IMPORT TRẠM TRUNG CHUYỂN
+import com.example.thuctaptotnghiep.utils.UserManager
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    viewModel: HomeViewModel = viewModel(),
     onNavigateToUpload: () -> Unit,
     onDocumentClick: (String) -> Unit,
     onProfileClick: () -> Unit,
-    onSearchClick: () -> Unit
+    onSearchClick: () -> Unit,
+    viewModel: HomeViewModel = hiltViewModel() // <-- CẬP NHẬT: Dùng Hilt và dời xuống cuối
 ) {
     val context = LocalContext.current
 
     val documentList by viewModel.documents.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState() // <-- Kéo state Refresh từ ViewModel
     val errorMessage by viewModel.errorMessage.collectAsState()
 
-    // ==========================================
-    // CẬP NHẬT: Lắng nghe Dữ liệu User từ Trạm Trung Chuyển (Real-time)
-    // ==========================================
+    // Lắng nghe Dữ liệu User từ Trạm Trung Chuyển (Real-time)
     val currentUserProfile by UserManager.userProfile.collectAsState()
 
     LaunchedEffect(errorMessage) {
@@ -65,30 +66,37 @@ fun HomeScreen(
         },
         containerColor = Color(0xFFF5F5F5)
     ) { paddingValues ->
-        LazyColumn(
+        // BỌC TÍNH NĂNG KÉO ĐỂ LÀM MỚI VÀO TOÀN BỘ MÀN HÌNH
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refreshDocuments() },
             modifier = Modifier.fillMaxSize().padding(paddingValues)
         ) {
-            // Truyền đối tượng User và Tên mặc định (từ Firebase) vào Header
-            item {
-                HeaderSection(
-                    userProfile = currentUserProfile,
-                    fallbackName = viewModel.userName,
-                    onSearchClick = onSearchClick
-                )
-            }
-
-            if (isLoading) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Truyền đối tượng User và Tên mặc định (từ Firebase) vào Header
                 item {
-                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Color(0xFF4C9EEB))
-                    }
+                    HeaderSection(
+                        userProfile = currentUserProfile,
+                        fallbackName = viewModel.userName,
+                        onSearchClick = onSearchClick
+                    )
                 }
-            } else {
-                item { DocumentSection(title = "Mới được tải lên", items = documentList, onItemClick = onDocumentClick) }
-                item { DocumentSection(title = "Tài liệu ôn thi", items = documentList.shuffled(), onItemClick = onDocumentClick) }
-                item { DocumentSection(title = "Tin nổi bật", items = documentList, onItemClick = onDocumentClick) }
+
+                if (isLoading && !isRefreshing) {
+                    item {
+                        Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = Color(0xFF4C9EEB))
+                        }
+                    }
+                } else {
+                    item { DocumentSection(title = "Mới được tải lên", items = documentList, onItemClick = onDocumentClick) }
+                    item { DocumentSection(title = "Tài liệu ôn thi", items = documentList.shuffled(), onItemClick = onDocumentClick) }
+                    item { DocumentSection(title = "Tin nổi bật", items = documentList, onItemClick = onDocumentClick) }
+                }
+                item { Spacer(modifier = Modifier.height(20.dp)) }
             }
-            item { Spacer(modifier = Modifier.height(20.dp)) }
         }
     }
 }
@@ -97,7 +105,7 @@ fun HomeScreen(
 
 @Composable
 fun HeaderSection(userProfile: User?, fallbackName: String, onSearchClick: () -> Unit) {
-    // Ưu tiên hiển thị tên từ MongoDB (đã đổi), nếu chưa đổi thì lấy tên Firebase
+    // Ưu tiên hiển thị tên từ MongoDB, nếu chưa có thì lấy tên Firebase
     val displayUserName = userProfile?.displayName?.takeIf { it.isNotBlank() } ?: fallbackName
 
     Column(
@@ -107,9 +115,7 @@ fun HeaderSection(userProfile: User?, fallbackName: String, onSearchClick: () ->
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // ==========================================
-            // CẬP NHẬT: HIỂN THỊ AVATAR ĐỒNG BỘ TỪ SERVER
-            // ==========================================
+            // HIỂN THỊ AVATAR ĐỒNG BỘ TỪ SERVER
             Box(
                 modifier = Modifier
                     .size(50.dp)
