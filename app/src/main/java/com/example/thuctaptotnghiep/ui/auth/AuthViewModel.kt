@@ -4,13 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import javax.inject.Inject
 
-class AuthViewModel : ViewModel() {
+@HiltViewModel
+class AuthViewModel @Inject constructor() : ViewModel() {
     private val auth = FirebaseAuth.getInstance()
 
     private val _isLoading = MutableStateFlow(false)
@@ -22,9 +25,6 @@ class AuthViewModel : ViewModel() {
     private val _isAuthSuccess = MutableStateFlow(false)
     val isAuthSuccess: StateFlow<Boolean> = _isAuthSuccess.asStateFlow()
 
-    // ==========================================
-    // 1. HÀM ĐĂNG NHẬP (Cũ)
-    // ==========================================
     fun login(email: String, pass: String) {
         if (email.isEmpty() || pass.isEmpty()) {
             _authMessage.value = "Vui lòng nhập đầy đủ Email và Mật khẩu!"
@@ -45,11 +45,7 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    // ==========================================
-    // 2. HÀM ĐĂNG KÝ (Mới thêm)
-    // ==========================================
     fun register(name: String, email: String, pass: String, confirmPass: String) {
-        // Kiểm tra dữ liệu đầu vào
         if (name.isEmpty() || email.isEmpty() || pass.isEmpty() || confirmPass.isEmpty()) {
             _authMessage.value = "Vui lòng nhập đầy đủ thông tin!"
             return

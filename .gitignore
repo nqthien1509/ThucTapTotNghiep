@@ -18,3 +18,7 @@ build/
 keystore.properties
 # Bỏ qua file hệ điều hành sinh ra (như máy Mac)
 .DS_Store
+node_modules/
+.env
+uploads/
+firebase-key.json

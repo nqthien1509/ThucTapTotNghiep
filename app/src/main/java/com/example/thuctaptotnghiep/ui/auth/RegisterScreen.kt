@@ -4,7 +4,9 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,36 +17,30 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
-    viewModel: AuthViewModel = viewModel(), // Tiêm chung ViewModel với màn Login
+    viewModel: AuthViewModel = hiltViewModel(), // Sử dụng hiltViewModel ở đây
     onRegisterSuccess: () -> Unit,
     onNavigateToLogin: () -> Unit
 ) {
     val context = LocalContext.current
 
-    // Các biến lưu chữ người dùng gõ
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
 
-    // Lắng nghe trạng thái từ ViewModel
     val isLoading by viewModel.isLoading.collectAsState()
     val authMessage by viewModel.authMessage.collectAsState()
     val isAuthSuccess by viewModel.isAuthSuccess.collectAsState()
 
-    // Xử lý chuyển màn hình khi đăng ký thành công
     LaunchedEffect(isAuthSuccess) {
-        if (isAuthSuccess) {
-            onRegisterSuccess()
-        }
+        if (isAuthSuccess) onRegisterSuccess()
     }
 
-    // Hiển thị thông báo (Lỗi hoặc Thành công)
     LaunchedEffect(authMessage) {
         authMessage?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
@@ -52,14 +48,21 @@ fun RegisterScreen(
         }
     }
 
-    Box(
+    // Thay thế Box bằng Column có Scroll & Insets
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFE3F2FD)), // Nền xanh nhạt đồng bộ
-        contentAlignment = Alignment.Center
+            .background(Color(0xFFE3F2FD))
+            .safeDrawingPadding() // Xử lý Status bar và Navigation bar
+            .verticalScroll(rememberScrollState()) // Cho phép cuộn khi bàn phím bật
+            .imePadding(), // Xử lý đẩy nội dung lên khi có bàn phím
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
         Card(
-            modifier = Modifier.fillMaxWidth(0.85f),
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .padding(vertical = 24.dp), // Thêm khoảng cách an toàn trên/dưới khi cuộn
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
@@ -126,7 +129,7 @@ fun RegisterScreen(
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4C9EEB)),
-                    enabled = !isLoading // Vô hiệu hóa nút khi đang tải
+                    enabled = !isLoading
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))

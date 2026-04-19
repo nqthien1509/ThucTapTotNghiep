@@ -1,1 +1,24 @@
-/build
+# Bỏ qua các file cấu hình máy tính cá nhân
+local.properties
+# Bỏ qua các thư mục build và cache của Gradle (rất nặng)
+.gradle/
+*/build/
+build/
+# Bỏ qua các file cấu hình của Android Studio (tránh xung đột khi người khác tải về)
+.idea/
+*.iml
+.cxx/
+# Bỏ qua các file cài đặt (App đã đóng gói)
+*.apk
+*.ap_
+*.aab
+# Bỏ qua các file bảo mật (Chữ ký ứng dụng)
+*.jks
+*.keystore
+keystore.properties
+# Bỏ qua file hệ điều hành sinh ra (như máy Mac)
+.DS_Store
+node_modules/
+.env
+uploads/
+firebase-key.json
