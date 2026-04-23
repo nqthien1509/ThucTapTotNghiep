@@ -15,7 +15,7 @@ import javax.inject.Inject
 
 @HiltViewModel // BẮT BUỘC: Báo cho Hilt biết đây là ViewModel cần quản lý
 class SearchViewModel @Inject constructor(
-    private val repository: DocumentRepository // TIÊM REPOSITORY VÀO ĐÂY (Thay vì gọi RetrofitClient)
+    private val repository: DocumentRepository // TIÊM REPOSITORY VÀO ĐÂY
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -37,8 +37,67 @@ class SearchViewModel @Inject constructor(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    // CẢI TIẾN 1: StateFlow chứa danh sách Category động
+    private val _categories = MutableStateFlow<List<String>>(listOf("Tất cả"))
+    val categories: StateFlow<List<String>> = _categories.asStateFlow()
+
+    // CẢI TIẾN 2: StateFlow chứa Lịch sử tìm kiếm
+    private val _recentSearches = MutableStateFlow<List<String>>(emptyList())
+    val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
+
     // Biến lưu trữ tiến trình tìm kiếm hiện tại
     private var searchJob: Job? = null
+
+    init {
+        fetchCategories()
+        loadRecentSearches()
+    }
+
+    private fun fetchCategories() {
+        viewModelScope.launch {
+            try {
+                // TODO: Tương lai thay bằng repository.getCategories() từ Backend
+                // Tạm thời dùng mock data, nhưng đã chuyển sang cơ chế dữ liệu động
+                val mockCategories = listOf("Tất cả", "Công nghệ thông tin", "Kinh tế", "Ngoại ngữ", "Luật", "An ninh mạng")
+                _categories.value = mockCategories
+            } catch (e: Exception) {
+                // Nếu lỗi mạng, ít nhất vẫn giữ lại được filter "Tất cả"
+                _categories.value = listOf("Tất cả")
+            }
+        }
+    }
+
+    private fun loadRecentSearches() {
+        // TODO: Lấy từ SharedPreferences hoặc DataStore để lưu vĩnh viễn
+        // Mock data khởi tạo để dễ test giao diện
+        _recentSearches.value = listOf("Đồ án tốt nghiệp", "Kotlin Jetpack Compose", "Tài liệu TOEIC")
+    }
+
+    // CẢI TIẾN 3: Thuật toán xử lý và lưu lịch sử tìm kiếm
+    fun saveRecentSearch(query: String) {
+        val trimmedQuery = query.trim()
+        if (trimmedQuery.isEmpty()) return
+
+        val currentList = _recentSearches.value.toMutableList()
+        // Xóa từ khóa nếu đã tồn tại để cập nhật nó lên vị trí đầu tiên
+        currentList.remove(trimmedQuery)
+        currentList.add(0, trimmedQuery)
+
+        // Giới hạn lưu 5 lịch sử gần nhất để UI không bị rác
+        if (currentList.size > 5) {
+            currentList.removeLast()
+        }
+
+        _recentSearches.value = currentList
+        // TODO: Ghi đè list này xuống SharedPreferences/DataStore tại đây
+    }
+
+    // CẢI TIẾN 4: Hàm gọi khi người dùng chủ động bấm nút Tìm Kiếm trên bàn phím
+    fun onSearchAction(query: String) {
+        saveRecentSearch(query) // Lưu vào lịch sử
+        _searchQuery.value = query
+        executeSearch(withDelay = false) // Tìm ngay lập tức, bỏ qua delay
+    }
 
     // 1. Hàm được gọi mỗi khi người dùng gõ chữ (Bật tính năng đợi 0.5s)
     fun onSearchQueryChange(newQuery: String) {
@@ -82,7 +141,6 @@ class SearchViewModel @Inject constructor(
                 // Nếu chọn "Tất cả" thì gửi 'null' lên Backend để không lọc loại tài liệu
                 val categoryParam = if (currentCategory == "Tất cả") null else currentCategory
 
-                // SỬA TẠI ĐÂY: Gọi Repository thay vì RetrofitClient
                 val results = repository.searchDocuments(
                     keyword = currentQuery,
                     category = categoryParam

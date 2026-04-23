@@ -73,7 +73,11 @@ fun AppNavigation() {
                 onNavigateToUpload = { navigateToBottomTab("upload") },
                 onDocumentClick = { id -> navController.navigate("document_detail/$id") },
                 onProfileClick = { navigateToBottomTab("profile") },
-                onSearchClick = { navigateToBottomTab("search") }
+                onSearchClick = { navigateToBottomTab("search") },
+                // Bắt sự kiện Xem tất cả và truyền category sang màn Search
+                onNavigateToSeeAll = { category ->
+                    navController.navigate("search?category=$category")
+                }
             )
         }
 
@@ -101,14 +105,15 @@ fun AppNavigation() {
                 onHomeClick = { navigateToBottomTab("home") },
                 onUploadClick = { /* Đang ở chính nó */ },
                 onProfileClick = { navigateToBottomTab("profile") },
-                onSearchClick = { navigateToBottomTab("search") }
+                onSearchClick = { navigateToBottomTab("search") },
+                // CẢI TIẾN: Truyền hàm mở chi tiết tài liệu vừa upload
+                onNavigateToDetail = { id -> navController.navigate("document_detail/$id") }
             )
         }
 
         // 6. Màn hình Hồ sơ (Profile)
         composable("profile") {
             ProfileScreen(
-                // Do ProfileScreen gắn onBackClick vào nút Home ở thanh dưới, ta truyền hàm về trang chủ
                 onBackClick = { navigateToBottomTab("home") },
                 onLogoutClick = {
                     FirebaseAuth.getInstance().signOut()
@@ -126,8 +131,18 @@ fun AppNavigation() {
         }
 
         // 7. Màn hình Tìm kiếm (Search)
-        composable("search") {
+        composable(
+            route = "search?category={category}",
+            arguments = listOf(navArgument("category") {
+                type = NavType.StringType
+                nullable = true
+            })
+        ) { backStackEntry ->
+            val category = backStackEntry.arguments?.getString("category")
+
             SearchScreen(
+                // CẢI TIẾN: Truyền initialCategory vào để ViewModel tự động chọn bộ lọc
+                initialCategory = category,
                 onBackClick = { navController.popBackStack() },
                 onDocumentClick = { id -> navController.navigate("document_detail/$id") },
                 onHomeClick = { navigateToBottomTab("home") },

@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -23,13 +24,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController // Import Controller bàn phím
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel // CẬP NHẬT: Import hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.thuctaptotnghiep.data.model.Document
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
 
@@ -41,12 +42,16 @@ fun SearchScreen(
     onHomeClick: () -> Unit,
     onUploadClick: () -> Unit,
     onProfileClick: () -> Unit,
-    viewModel: SearchViewModel = hiltViewModel() // CẬP NHẬT: Dùng hiltViewModel() thay vì viewModel()
+    // (Tùy chọn) Truyền initialCategory từ Navigation (nếu có)
+    initialCategory: String? = null,
+    viewModel: SearchViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val focusManager = LocalFocusManager.current
 
-    // Lắng nghe toàn bộ State từ ViewModel
+    // CẢI TIẾN 2: Lấy Controller để quản lý bàn phím ảo
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    // Lắng nghe State từ ViewModel
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
@@ -54,8 +59,18 @@ fun SearchScreen(
     val hasSearched by viewModel.hasSearched.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
 
-    // Danh sách bộ lọc
-    val categories = listOf("Tất cả", "Slide", "Đề thi", "Giáo trình")
+    // CẢI TIẾN 1: Thu thập Category và Lịch sử động
+    val categories by viewModel.categories.collectAsState()
+    val recentSearches by viewModel.recentSearches.collectAsState()
+
+    // Khởi tạo Category nếu được truyền từ màn hình Home sang (Xem tất cả)
+    LaunchedEffect(initialCategory) {
+        if (!initialCategory.isNullOrBlank()) {
+            // Tương lai: Map ID/Code của "LATEST", "POPULAR" thành Tên Category thực tế
+            // Tạm thời mình set cứng nếu có
+            viewModel.onCategorySelected(initialCategory)
+        }
+    }
 
     // Bắt lỗi và thông báo
     LaunchedEffect(errorMessage) {
@@ -80,7 +95,7 @@ fun SearchScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Header Tìm kiếm
+            // --- HEADER TÌM KIẾM ---
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -100,7 +115,7 @@ fun SearchScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Thanh Search Input
+                // --- THANH SEARCH INPUT ---
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { newQuery ->
@@ -111,7 +126,10 @@ fun SearchScreen(
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
+                            IconButton(onClick = {
+                                viewModel.onSearchQueryChange("")
+                                keyboardController?.show() // Mở lại phím khi xóa clear text
+                            }) {
                                 Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
                             }
                         }
@@ -126,52 +144,97 @@ fun SearchScreen(
                     ),
                     shape = RoundedCornerShape(16.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() })
+                    // CẢI TIẾN 2: Gọi action search ngay lập tức và ẩn bàn phím
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            keyboardController?.hide()
+                            viewModel.onSearchAction(searchQuery)
+                        }
+                    )
                 )
             }
 
-            // THANH CUỘN NGANG CHỨA CÁC BỘ LỌC
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                items(categories) { category ->
-                    FilterChip(
-                        selected = selectedCategory == category,
-                        onClick = { viewModel.onCategorySelected(category) },
-                        label = { Text(category, fontWeight = FontWeight.Medium) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Color(0xFF4C9EEB),
-                            selectedLabelColor = Color.White,
-                            containerColor = Color.White,
-                            labelColor = Color.DarkGray
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            enabled = true,
+            // --- THANH BỘ LỌC ĐỘNG (CATEGORY) ---
+            if (categories.isNotEmpty()) {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(categories) { category ->
+                        FilterChip(
                             selected = selectedCategory == category,
-                            borderColor = Color(0xFF4C9EEB).copy(alpha = 0.3f),
-                            borderWidth = 1.dp
-                        ),
-                        shape = RoundedCornerShape(16.dp)
-                    )
+                            onClick = {
+                                viewModel.onCategorySelected(category)
+                                keyboardController?.hide() // Chạm vào filter cũng ẩn phím cho rộng màn hình
+                            },
+                            label = { Text(category, fontWeight = FontWeight.Medium) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color(0xFF4C9EEB),
+                                selectedLabelColor = Color.White,
+                                containerColor = Color.White,
+                                labelColor = Color.DarkGray
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = selectedCategory == category,
+                                borderColor = Color(0xFF4C9EEB).copy(alpha = 0.3f),
+                                borderWidth = 1.dp
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                    }
                 }
             }
 
-            // Phần kết quả bên dưới
+            // --- KHU VỰC HIỂN THỊ CHÍNH ---
             Box(modifier = Modifier.fillMaxSize()) {
-                if (isSearching) {
+                // CẢI TIẾN 3: Hiển thị Lịch sử tìm kiếm khi chưa gõ gì và chưa có kết quả
+                if (searchQuery.isBlank() && !hasSearched && recentSearches.isNotEmpty()) {
+                    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                        Text(
+                            text = "Tìm kiếm gần đây",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        LazyColumn {
+                            items(recentSearches) { recentItem ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            keyboardController?.hide()
+                                            viewModel.onSearchAction(recentItem)
+                                        }
+                                        .padding(vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.History, contentDescription = null, tint = Color.Gray)
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Text(text = recentItem, fontSize = 16.sp, color = Color.DarkGray)
+                                }
+                            }
+                        }
+                    }
+                }
+                // Trạng thái Loading đang tìm kiếm
+                else if (isSearching) {
                     CircularProgressIndicator(
                         color = Color(0xFF4C9EEB),
                         modifier = Modifier.align(Alignment.Center)
                     )
-                } else if (hasSearched && searchResults.isEmpty()) {
+                }
+                // Trạng thái đã tìm nhưng không có kết quả
+                else if (hasSearched && searchResults.isEmpty()) {
                     Text(
                         "Không tìm thấy tài liệu phù hợp",
                         color = Color.Gray,
                         modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp)
                     )
-                } else {
+                }
+                // Trạng thái có kết quả hiển thị
+                else {
                     LazyColumn(
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)

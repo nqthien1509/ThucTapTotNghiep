@@ -1,8 +1,13 @@
 package com.example.thuctaptotnghiep.ui.auth
 
+import android.util.Patterns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException // Bổ sung import lỗi trùng email
 import com.google.firebase.auth.UserProfileChangeRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,9 +30,27 @@ class AuthViewModel @Inject constructor() : ViewModel() {
     private val _isAuthSuccess = MutableStateFlow(false)
     val isAuthSuccess: StateFlow<Boolean> = _isAuthSuccess.asStateFlow()
 
+    // Cải tiến 1: Thêm các StateFlow quản lý lỗi chi tiết cho từng trường
+    private val _nameError = MutableStateFlow<String?>(null)
+    val nameError: StateFlow<String?> = _nameError.asStateFlow()
+
+    private val _emailError = MutableStateFlow<String?>(null)
+    val emailError: StateFlow<String?> = _emailError.asStateFlow()
+
+    private val _passwordError = MutableStateFlow<String?>(null)
+    val passwordError: StateFlow<String?> = _passwordError.asStateFlow()
+
+    private val _confirmPasswordError = MutableStateFlow<String?>(null)
+    val confirmPasswordError: StateFlow<String?> = _confirmPasswordError.asStateFlow()
+
     fun login(email: String, pass: String) {
         if (email.isEmpty() || pass.isEmpty()) {
             _authMessage.value = "Vui lòng nhập đầy đủ Email và Mật khẩu!"
+            return
+        }
+
+        if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            _authMessage.value = "Định dạng email không hợp lệ!"
             return
         }
 
@@ -37,27 +60,62 @@ class AuthViewModel @Inject constructor() : ViewModel() {
                 auth.signInWithEmailAndPassword(email, pass).await()
                 _authMessage.value = "Đăng nhập thành công!"
                 _isAuthSuccess.value = true
+            } catch (e: FirebaseAuthInvalidUserException) {
+                _authMessage.value = "Tài khoản chưa được đăng ký!"
+            } catch (e: FirebaseAuthInvalidCredentialsException) {
+                _authMessage.value = "Sai email hoặc mật khẩu!"
+            } catch (e: FirebaseNetworkException) {
+                _authMessage.value = "Lỗi kết nối mạng. Vui lòng kiểm tra Internet!"
             } catch (e: Exception) {
-                _authMessage.value = "Sai email hoặc mật khẩu! Vui lòng thử lại."
+                _authMessage.value = "Đăng nhập thất bại. Vui lòng thử lại sau!"
             } finally {
                 _isLoading.value = false
             }
         }
     }
 
-    fun register(name: String, email: String, pass: String, confirmPass: String) {
-        if (name.isEmpty() || email.isEmpty() || pass.isEmpty() || confirmPass.isEmpty()) {
-            _authMessage.value = "Vui lòng nhập đầy đủ thông tin!"
-            return
+    // Cải tiến 2: Thêm tham số isTermsAccepted và áp dụng Validate mạnh
+    fun register(name: String, email: String, pass: String, confirmPass: String, isTermsAccepted: Boolean) {
+        // Reset toàn bộ lỗi trước khi validate lại
+        _nameError.value = null
+        _emailError.value = null
+        _passwordError.value = null
+        _confirmPasswordError.value = null
+
+        var isValid = true
+
+        // Validate Tên
+        if (name.isEmpty()) {
+            _nameError.value = "Họ tên không được để trống"
+            isValid = false
         }
+
+        // Validate Email
+        if (email.isEmpty() || !Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            _emailError.value = "Email không hợp lệ"
+            isValid = false
+        }
+
+        // Validate mật khẩu mạnh (≥ 8 ký tự, gồm chữ hoa, số và ký tự đặc biệt)
+        val passwordPattern = "^(?=.*[A-Z])(?=.*[0-9])(?=.*[@#\$%^&+=!]).{8,}\$"
+        if (!pass.matches(passwordPattern.toRegex())) {
+            _passwordError.value = "Mật khẩu cần ≥ 8 ký tự, gồm chữ hoa, số và ký tự đặc biệt"
+            isValid = false
+        }
+
+        // Validate Xác nhận mật khẩu
         if (pass != confirmPass) {
-            _authMessage.value = "Mật khẩu xác nhận không khớp!"
-            return
+            _confirmPasswordError.value = "Mật khẩu xác nhận không khớp"
+            isValid = false
         }
-        if (pass.length < 6) {
-            _authMessage.value = "Mật khẩu phải từ 6 ký tự trở lên!"
-            return
+
+        // Kiểm tra điều khoản
+        if (!isTermsAccepted) {
+            _authMessage.value = "Bạn cần đồng ý với Điều khoản và Chính sách!"
+            isValid = false
         }
+
+        if (!isValid) return // Ngừng luồng nếu có bất kỳ lỗi validate nào
 
         viewModelScope.launch {
             _isLoading.value = true
@@ -74,8 +132,11 @@ class AuthViewModel @Inject constructor() : ViewModel() {
 
                 _authMessage.value = "Đăng ký thành công!"
                 _isAuthSuccess.value = true
+            } catch (e: FirebaseAuthUserCollisionException) {
+                // Cải tiến 3: Bắt lỗi trùng email và hiển thị ngay tại field
+                _emailError.value = "Email này đã được đăng ký!"
             } catch (e: Exception) {
-                _authMessage.value = "Lỗi đăng ký: Tài khoản đã tồn tại hoặc email sai định dạng."
+                _authMessage.value = "Lỗi đăng ký. Vui lòng thử lại sau!"
             } finally {
                 _isLoading.value = false
             }

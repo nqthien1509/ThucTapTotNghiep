@@ -33,9 +33,11 @@ import com.example.thuctaptotnghiep.utils.UserManager
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
-// <-- IMPORT MỚI: Dành cho các Component trạng thái dùng chung
+
 import com.example.thuctaptotnghiep.ui.components.EmptyStateView
 import com.example.thuctaptotnghiep.ui.components.LoadingStateView
+// CẢI TIẾN: Import hàm toFullUrl() đã tạo
+import com.example.thuctaptotnghiep.utils.toFullUrl
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,11 +46,17 @@ fun HomeScreen(
     onDocumentClick: (String) -> Unit,
     onProfileClick: () -> Unit,
     onSearchClick: () -> Unit,
+    // CẢI TIẾN: Thêm callback cho nút Xem tất cả
+    onNavigateToSeeAll: (String) -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
 
-    val documentList by viewModel.documents.collectAsState()
+    // CẢI TIẾN: Collect 3 danh sách đã phân loại từ ViewModel
+    val latestDocs by viewModel.latestDocs.collectAsState()
+    val popularDocs by viewModel.popularDocs.collectAsState()
+    val recommendedDocs by viewModel.recommendedDocs.collectAsState()
+
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
@@ -92,7 +100,6 @@ fun HomeScreen(
 
                 if (isLoading && !isRefreshing) {
                     item {
-                        // CẢI TIẾN: Sử dụng LoadingStateView dùng chung, giới hạn chiều cao 30% màn hình
                         LoadingStateView(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -100,9 +107,31 @@ fun HomeScreen(
                         )
                     }
                 } else {
-                    item { DocumentSection(title = "Mới được tải lên", items = documentList, onItemClick = onDocumentClick) }
-                    item { DocumentSection(title = "Tài liệu ôn thi", items = documentList.shuffled(), onItemClick = onDocumentClick) }
-                    item { DocumentSection(title = "Tin nổi bật", items = documentList, onItemClick = onDocumentClick) }
+                    // CẢI TIẾN: Truyền dữ liệu riêng cho từng section và gắn sự kiện Xem tất cả
+                    item {
+                        DocumentSection(
+                            title = "Mới được tải lên",
+                            items = latestDocs,
+                            onItemClick = onDocumentClick,
+                            onSeeAllClick = { onNavigateToSeeAll("LATEST") }
+                        )
+                    }
+                    item {
+                        DocumentSection(
+                            title = "Tài liệu phổ biến",
+                            items = popularDocs,
+                            onItemClick = onDocumentClick,
+                            onSeeAllClick = { onNavigateToSeeAll("POPULAR") }
+                        )
+                    }
+                    item {
+                        DocumentSection(
+                            title = "Dành riêng cho bạn",
+                            items = recommendedDocs,
+                            onItemClick = onDocumentClick,
+                            onSeeAllClick = { onNavigateToSeeAll("RECOMMENDED") }
+                        )
+                    }
                 }
                 item { Spacer(modifier = Modifier.height(20.dp)) }
             }
@@ -132,7 +161,8 @@ fun HeaderSection(userProfile: User?, fallbackName: String, onSearchClick: () ->
                 contentAlignment = Alignment.Center
             ) {
                 if (!userProfile?.avatarUrl.isNullOrBlank()) {
-                    val fullImageUrl = "http://10.0.2.2:3000${userProfile!!.avatarUrl}"
+                    // CẢI TIẾN: Bỏ hard-code IP, dùng hàm extension toFullUrl()
+                    val fullImageUrl = userProfile?.avatarUrl.toFullUrl()
                     AsyncImage(
                         model = fullImageUrl,
                         contentDescription = "Ảnh đại diện của $displayUserName",
@@ -182,7 +212,12 @@ fun HeaderSection(userProfile: User?, fallbackName: String, onSearchClick: () ->
 }
 
 @Composable
-fun DocumentSection(title: String, items: List<Document>, onItemClick: (String) -> Unit) {
+fun DocumentSection(
+    title: String,
+    items: List<Document>,
+    onItemClick: (String) -> Unit,
+    onSeeAllClick: () -> Unit // CẢI TIẾN: Thêm tham số callback
+) {
     Column(modifier = Modifier.padding(top = 20.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -201,7 +236,7 @@ fun DocumentSection(title: String, items: List<Document>, onItemClick: (String) 
                     .clickable(
                         onClickLabel = "Xem tất cả tài liệu mục $title",
                         role = Role.Button,
-                        onClick = { /* Todo: Xử lý click chuyển trang */ }
+                        onClick = onSeeAllClick // CẢI TIẾN: Gắn callback vào sự kiện click
                     )
                     .padding(horizontal = 8.dp, vertical = 12.dp)
             )
@@ -209,7 +244,6 @@ fun DocumentSection(title: String, items: List<Document>, onItemClick: (String) 
         Spacer(modifier = Modifier.height(4.dp))
 
         if (items.isEmpty()) {
-            // CẢI TIẾN: Tận dụng EmptyStateView dùng chung, giới hạn chiều cao để không bị chiếm full màn
             EmptyStateView(
                 message = "Chưa có tài liệu nào.",
                 modifier = Modifier
@@ -249,6 +283,7 @@ fun DocumentCardPreview(document: Document, onClick: () -> Unit) {
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
+            // Tương lai nếu Document có thumbnailUrl, bạn cũng có thể gắn AsyncImage và toFullUrl() vào đây thay vì Box màu tĩnh
             Box(
                 modifier = Modifier
                     .fillMaxWidth()

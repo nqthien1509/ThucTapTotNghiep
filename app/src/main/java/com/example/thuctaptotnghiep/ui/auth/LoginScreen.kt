@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons // Bổ sung import cho Icon
+import androidx.compose.material.icons.filled.Visibility // Bổ sung import cho Icon Visibility
+import androidx.compose.material.icons.filled.VisibilityOff // Bổ sung import cho Icon VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation // Bổ sung import VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -29,6 +33,9 @@ fun LoginScreen(
     val context = LocalContext.current
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+
+    // Cải tiến: Thêm state quản lý ẩn/hiện mật khẩu
+    var passwordVisible by remember { mutableStateOf(false) }
 
     val isLoading by viewModel.isLoading.collectAsState()
     val authMessage by viewModel.authMessage.collectAsState()
@@ -87,11 +94,20 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Cải tiến: Cập nhật UI ô Mật khẩu để có nút hiện/ẩn
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
                     label = { Text("Mật khẩu") },
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                        val description = if (passwordVisible) "Ẩn mật khẩu" else "Hiện mật khẩu"
+
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(imageVector = image, contentDescription = description)
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
