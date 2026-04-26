@@ -12,3 +12,6 @@ firebase-key.json
 
 # Thư mục chứa file PDF upload tạm thời
 uploads/
+
+.gradle/
+build/
