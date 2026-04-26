@@ -8,7 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.thuctaptotnghiep.data.repository.DocumentRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job // Bổ sung import Job
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +25,6 @@ import java.io.File
 import java.io.FileOutputStream
 import javax.inject.Inject
 
-// CẢI TIẾN 1: Thay đổi Success để mang theo documentId phục vụ điều hướng
 sealed class UploadState {
     object Idle : UploadState()
     object Loading : UploadState()
@@ -41,13 +40,11 @@ class UploadViewModel @Inject constructor(
     private val _uploadState = MutableStateFlow<UploadState>(UploadState.Idle)
     val uploadState: StateFlow<UploadState> = _uploadState.asStateFlow()
 
-    // CẢI TIẾN 2: StateFlow quản lý % tiến trình upload
     private val _uploadProgress = MutableStateFlow(0f)
     val uploadProgress: StateFlow<Float> = _uploadProgress.asStateFlow()
 
     private var progressJob: Job? = null
 
-    // CẢI TIẾN 3: Validate chống ký tự xấu, script độc hại (Bảo mật)
     private fun isValidText(text: String): Boolean {
         // Chỉ cho phép chữ, số, tiếng Việt, khoảng trắng và các dấu phẩy, chấm, gạch ngang
         val safePattern = "^[a-zA-Z0-9_ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼỀỀỂưăạảấầẩẫậắằẳẵặẹẻẽềềểỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪễệỉịọỏốồổỗộớờởỡợụủứừỬỮỰỲỴÝỶỸửữựỳỵỷỹ\\s\\-\\.,]+$"
@@ -98,8 +95,7 @@ class UploadViewModel @Inject constructor(
                     val descBody = description.toRequestBody("text/plain".toMediaTypeOrNull())
                     val tagsBody = tags.toRequestBody("text/plain".toMediaTypeOrNull())
 
-                    // Gọi API thông qua Repository
-                    // Giả định hàm này thành công sẽ không quăng Exception
+                    // Gọi API thông qua Repository (trả về UploadResponse)
                     val result = repository.uploadDocument(
                         file = filePart, title = titleBody, authorName = authorBody,
                         subject = subjectBody, category = categoryBody, description = descBody, tags = tagsBody
@@ -107,11 +103,12 @@ class UploadViewModel @Inject constructor(
 
                     stopSimulatedProgress() // Đẩy thanh upload lên 100%
 
-                    // Tương lai: Nếu backend trả về Document Object, bạn lấy result.id
-                    // Tạm thời tạo mock ID để UI hiển thị được nút CTA Xem tài liệu
-                    val mockNewDocumentId = "DOC_${System.currentTimeMillis()}"
+                    // ==========================================
+                    // CẢI TIẾN: Trích xuất ID thật từ wrapper UploadResponse
+                    // ==========================================
+                    val realDocumentId = result.document.id
 
-                    _uploadState.value = UploadState.Success(documentId = mockNewDocumentId)
+                    _uploadState.value = UploadState.Success(documentId = realDocumentId)
                     file.delete()
                 } else {
                     stopSimulatedProgress()

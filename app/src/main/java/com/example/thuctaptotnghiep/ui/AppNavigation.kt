@@ -1,6 +1,7 @@
 package com.example.thuctaptotnghiep.ui
 
 import androidx.compose.runtime.Composable
+import androidx.navigation.NavGraph.Companion.findStartDestination // Bổ sung import để lấy node gốc
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -24,16 +25,17 @@ fun AppNavigation() {
     val startRoute = if (currentUser != null) "home" else "login"
 
     // =======================================================
-    // HÀM TỐI ƯU ĐIỀU HƯỚNG BOTTOM BAR (CHỐNG TRÀN BỘ NHỚ)
+    // HÀM TỐI ƯU ĐIỀU HƯỚNG BOTTOM BAR (CHUẨN GOOGLE)
     // =======================================================
     val navigateToBottomTab = { route: String ->
         navController.navigate(route) {
-            // Quay về "home" làm gốc để không tạo ra chuỗi màn hình dài dằng dặc
-            popUpTo("home") {
-                saveState = true // Lưu lại trạng thái của tab (VD: người dùng đang cuộn tới đâu)
+            // CẢI TIẾN: Thay vì hard-code chuỗi "home", dùng findStartDestination().id
+            // Giúp dọn dẹp Back Stack an toàn tuyệt đối bất kể màn hình khởi đầu là gì.
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true // Lưu lại trạng thái của tab bị đè
             }
             launchSingleTop = true // Không mở thêm màn hình mới nếu đã đang ở đúng tab đó
-            restoreState = true    // Phục hồi lại trạng thái cũ khi quay lại
+            restoreState = true    // Phục hồi lại trạng thái cũ khi quay lại (VD: Vị trí cuộn trang)
         }
     }
 
@@ -106,7 +108,6 @@ fun AppNavigation() {
                 onUploadClick = { /* Đang ở chính nó */ },
                 onProfileClick = { navigateToBottomTab("profile") },
                 onSearchClick = { navigateToBottomTab("search") },
-                // CẢI TIẾN: Truyền hàm mở chi tiết tài liệu vừa upload
                 onNavigateToDetail = { id -> navController.navigate("document_detail/$id") }
             )
         }
@@ -118,7 +119,7 @@ fun AppNavigation() {
                 onLogoutClick = {
                     FirebaseAuth.getInstance().signOut()
                     navController.navigate("login") {
-                        // popUpTo(navController.graph.id) là lệnh mạnh nhất để xóa sạch 100% Back Stack
+                        // Lệnh mạnh nhất để xóa sạch 100% Back Stack khi đăng xuất
                         popUpTo(navController.graph.id) { inclusive = true }
                     }
                 },
@@ -141,7 +142,6 @@ fun AppNavigation() {
             val category = backStackEntry.arguments?.getString("category")
 
             SearchScreen(
-                // CẢI TIẾN: Truyền initialCategory vào để ViewModel tự động chọn bộ lọc
                 initialCategory = category,
                 onBackClick = { navController.popBackStack() },
                 onDocumentClick = { id -> navController.navigate("document_detail/$id") },

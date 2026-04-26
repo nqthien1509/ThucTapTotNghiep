@@ -1,5 +1,6 @@
 package com.example.thuctaptotnghiep.ui.components
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -10,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -39,11 +41,14 @@ fun UploadButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 // ==========================================
 @Composable
 fun AppBottomNavigationBar(
-    onHomeClick: () -> Unit, // Thêm nút Home
+    currentRoute: String? = null, // CẢI TIẾN 1: Nhận diện màn hình hiện tại (mặc định null để không báo lỗi code cũ)
+    onHomeClick: () -> Unit,
     onUploadClick: () -> Unit,
     onProfileClick: () -> Unit,
     onSearchClick: () -> Unit
 ) {
+    val context = LocalContext.current // Dùng để hiển thị Toast
+
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.BottomCenter
@@ -56,30 +61,51 @@ fun AppBottomNavigationBar(
         ) {
             NavigationBarItem(
                 icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                selected = false, // Tạm thời để false hết để dùng chung nhiều trang
-                colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFF4C9EEB), unselectedIconColor = Color.Gray, indicatorColor = Color.White),
-                onClick = onHomeClick // Gắn sự kiện về Home
-            )
-            NavigationBarItem(
-                icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-                selected = false,
-                colors = NavigationBarItemDefaults.colors(unselectedIconColor = Color.Gray),
-                onClick = onSearchClick
+                selected = currentRoute == "home", // Làm sáng nếu đang ở Home
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF4C9EEB),
+                    unselectedIconColor = Color.Gray,
+                    indicatorColor = Color(0xFFE3F2FD) // Màu nền nhạt phía sau icon khi được chọn
+                ),
+                onClick = { if (currentRoute != "home") onHomeClick() } // Tránh load lại trang nếu đang ở chính nó
             )
 
-            Spacer(modifier = Modifier.weight(1.5f))
+            NavigationBarItem(
+                icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                selected = currentRoute == "search", // Làm sáng nếu đang ở Search
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF4C9EEB),
+                    unselectedIconColor = Color.Gray,
+                    indicatorColor = Color(0xFFE3F2FD)
+                ),
+                onClick = { if (currentRoute != "search") onSearchClick() }
+            )
+
+            Spacer(modifier = Modifier.weight(1.5f)) // Khoảng trống cho nút Upload ở giữa
 
             NavigationBarItem(
                 icon = { Icon(Icons.Default.Notifications, contentDescription = "Notifications") },
-                selected = false,
-                colors = NavigationBarItemDefaults.colors(unselectedIconColor = Color.Gray),
-                onClick = {}
+                selected = currentRoute == "notifications",
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF4C9EEB),
+                    unselectedIconColor = Color.Gray,
+                    indicatorColor = Color(0xFFE3F2FD)
+                ),
+                onClick = {
+                    // CẢI TIẾN 2: Hiển thị Toast thay vì nút "chết"
+                    Toast.makeText(context, "Tính năng thông báo đang được phát triển!", Toast.LENGTH_SHORT).show()
+                }
             )
+
             NavigationBarItem(
                 icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
-                selected = false,
-                colors = NavigationBarItemDefaults.colors(unselectedIconColor = Color.Gray),
-                onClick = onProfileClick
+                selected = currentRoute == "profile", // Làm sáng nếu đang ở Profile
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF4C9EEB),
+                    unselectedIconColor = Color.Gray,
+                    indicatorColor = Color(0xFFE3F2FD)
+                ),
+                onClick = { if (currentRoute != "profile") onProfileClick() }
             )
         }
 

@@ -8,13 +8,17 @@ import com.example.thuctaptotnghiep.data.model.Document
 import com.example.thuctaptotnghiep.data.model.User
 import com.example.thuctaptotnghiep.data.repository.DocumentRepository
 import com.example.thuctaptotnghiep.utils.UserManager
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -26,6 +30,9 @@ import javax.inject.Inject
 class ProfileViewModel @Inject constructor(
     private val repository: DocumentRepository
 ) : ViewModel() {
+
+    // CẢI TIẾN 1: Cờ Cache cục bộ
+    private var isDataLoaded = false
 
     // =======================================================
     // 1. STATE QUẢN LÝ 3 DANH SÁCH TÀI LIỆU
@@ -54,6 +61,11 @@ class ProfileViewModel @Inject constructor(
     private val _deleteStatus = MutableStateFlow<String?>(null)
     val deleteStatus: StateFlow<String?> = _deleteStatus.asStateFlow()
 
+    // CẢI TIẾN 3: Quản lý trạng thái Chờ Xóa (Undo)
+    private val deleteJobs = mutableMapOf<String, Job>()
+    private val _pendingDeleteIds = MutableStateFlow<Set<String>>(emptySet())
+    val pendingDeleteIds: StateFlow<Set<String>> = _pendingDeleteIds.asStateFlow()
+
     // =======================================================
     // 3. TRẠM TRUNG CHUYỂN DỮ LIỆU USER
     // =======================================================
@@ -71,15 +83,18 @@ class ProfileViewModel @Inject constructor(
     }
 
     // =======================================================
-    // 4. CÁC HÀM XỬ LÝ
+    // 4. CÁC HÀM XỬ LÝ DỮ LIỆU
     // =======================================================
 
-    fun loadAllProfileData() {
+    fun loadAllProfileData(forceRefresh: Boolean = false) {
+        // Áp dụng Cache: Nếu đã có data và không bắt buộc refresh thì bỏ qua
+        if (isDataLoaded && !forceRefresh) return
+
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
             try {
-                // CẬP NHẬT: Xóa tham số userName ở hàm getMyDocuments() vì đã bị loại bỏ ở Repository
+                // Tận dụng async để gọi 3 API song song
                 val myDocsDeferred = async { repository.getMyDocuments() }
                 val favDocsDeferred = async { repository.getFavoriteDocuments(userId) }
                 val watchDocsDeferred = async { repository.getWatchLaterDocuments(userId) }
@@ -88,6 +103,7 @@ class ProfileViewModel @Inject constructor(
                 _favoriteDocuments.value = favDocsDeferred.await()
                 _watchLaterDocuments.value = watchDocsDeferred.await()
 
+                isDataLoaded = true // Đánh dấu đã load xong cache
             } catch (e: Exception) {
                 _errorMessage.value = e.message
             } finally {
@@ -99,61 +115,84 @@ class ProfileViewModel @Inject constructor(
     fun refreshDocuments() {
         viewModelScope.launch {
             _isRefreshing.value = true
-            _errorMessage.value = null
-            try {
-                // CẬP NHẬT: Xóa tham số userName ở đây luôn
-                val myDocsDeferred = async { repository.getMyDocuments() }
-                val favDocsDeferred = async { repository.getFavoriteDocuments(userId) }
-                val watchDocsDeferred = async { repository.getWatchLaterDocuments(userId) }
+            loadAllProfileData(forceRefresh = true) // Ép tải lại
+            _isRefreshing.value = false
+        }
+    }
 
-                _myDocuments.value = myDocsDeferred.await()
-                _favoriteDocuments.value = favDocsDeferred.await()
-                _watchLaterDocuments.value = watchDocsDeferred.await()
+    // =======================================================
+    // 5. CÁC HÀM XỬ LÝ XÓA & HOÀN TÁC (OPTIMISTIC UI)
+    // =======================================================
+
+    fun deleteDocumentWithUndo(id: String) {
+        // Đưa item vào danh sách chờ xóa để UI ẩn nó đi ngay lập tức
+        _pendingDeleteIds.value += id
+
+        // Hủy job cũ nếu spam click
+        deleteJobs[id]?.cancel()
+
+        deleteJobs[id] = viewModelScope.launch {
+            delay(4000) // Cho người dùng 4 giây để bấm "Hoàn tác"
+
+            try {
+                // Thực sự gọi API xóa sau khi hết 4 giây
+                repository.deleteDocument(id)
+
+                // Cập nhật lại danh sách gốc
+                _myDocuments.value = _myDocuments.value.filter { it.id != id }
+                _deleteStatus.value = "Đã xóa thành công!"
             } catch (e: Exception) {
-                _errorMessage.value = e.message
+                _errorMessage.value = "Lỗi khi xóa: ${e.message}"
             } finally {
-                _isRefreshing.value = false
+                // Dọn dẹp trạng thái chờ
+                _pendingDeleteIds.value -= id
+                deleteJobs.remove(id)
             }
         }
     }
 
-    fun deleteDocument(id: String) {
-        viewModelScope.launch {
-            try {
-                repository.deleteDocument(id)
-                _deleteStatus.value = "Đã xóa thành công!"
-                loadAllProfileData()
-            } catch (e: Exception) {
-                _errorMessage.value = "Lỗi khi xóa: ${e.message}"
-            }
-        }
+    fun undoDelete(id: String) {
+        deleteJobs[id]?.cancel() // Dừng lệnh xóa API
+        deleteJobs.remove(id)
+        _pendingDeleteIds.value -= id // Bỏ khỏi danh sách ẩn, item hiện lại bình thường
     }
 
     fun resetDeleteStatus() {
         _deleteStatus.value = null
     }
 
-    // TÍNH NĂNG TÀI KHOẢN
+    // =======================================================
+    // 6. TÍNH NĂNG TÀI KHOẢN (AUTH & MONGODB)
+    // =======================================================
+
     fun logout(onSuccess: () -> Unit) {
         FirebaseAuth.getInstance().signOut()
         UserManager.clearUser()
         onSuccess()
     }
 
-    fun changePassword(newPassword: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    // CẢI TIẾN 2: Re-Auth trước khi đổi mật khẩu
+    fun changePassword(currentPass: String, newPass: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         val user = FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            user.updatePassword(newPassword)
-                .addOnCompleteListener { task ->
-                    if (task.isSuccessful) onSuccess()
-                    else onError(task.exception?.message ?: "Có lỗi xảy ra khi đổi mật khẩu")
+        if (user != null && user.email != null) {
+            viewModelScope.launch {
+                try {
+                    // Bước 1: Xác thực lại bằng mật khẩu hiện tại
+                    val credential = EmailAuthProvider.getCredential(user.email!!, currentPass)
+                    user.reauthenticate(credential).await()
+
+                    // Bước 2: Cập nhật mật khẩu mới
+                    user.updatePassword(newPass).await()
+                    onSuccess()
+                } catch (e: Exception) {
+                    onError(e.message ?: "Mật khẩu hiện tại không đúng hoặc phiên đăng nhập đã hết hạn!")
                 }
+            }
         } else {
-            onError("Không tìm thấy thông tin người dùng")
+            onError("Không tìm thấy thông tin xác thực người dùng.")
         }
     }
 
-    // QUẢN LÝ THÔNG TIN CÁ NHÂN (MONGODB)
     fun fetchUserProfile(uid: String) {
         viewModelScope.launch {
             try {
@@ -204,7 +243,6 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    // Hàm phụ trợ
     private fun uriToFile(context: Context, uri: Uri): File? {
         val contentResolver = context.contentResolver
         val tempFile = File(context.cacheDir, "temp_avatar_${System.currentTimeMillis()}.jpg")

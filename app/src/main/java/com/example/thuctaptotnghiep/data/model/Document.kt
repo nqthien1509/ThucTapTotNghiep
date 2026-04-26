@@ -28,3 +28,13 @@ data class Document(
     @SerializedName("isFavorite") val isFavorite: Boolean = false,
     @SerializedName("isWatchLater") val isWatchLater: Boolean = false
 )
+
+// =======================================================
+// CẢI TIẾN QUAN TRỌNG: Wrapper class cho API Upload
+// =======================================================
+// Backend trả về JSON dạng: { "message": "...", "document": { ... } }
+// Class này giúp Retrofit hiểu và ép kiểu chính xác, tránh lỗi Parsing Error!
+data class UploadResponse(
+    @SerializedName("message") val message: String,
+    @SerializedName("document") val document: Document
+)

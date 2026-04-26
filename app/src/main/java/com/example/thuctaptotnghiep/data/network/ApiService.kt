@@ -1,6 +1,7 @@
 package com.example.thuctaptotnghiep.data.network
 
 import com.example.thuctaptotnghiep.data.model.Document
+import com.example.thuctaptotnghiep.data.model.UploadResponse // <-- Import thêm UploadResponse
 import com.example.thuctaptotnghiep.data.model.User
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -20,6 +21,7 @@ interface ApiService {
     // 1. TÀI LIỆU (DOCUMENTS)
     // ==========================================
 
+    // CẢI TIẾN QUAN TRỌNG: Đổi thành UploadResponse để khớp với định dạng JSON { message, document }
     @Multipart
     @POST("api/upload")
     suspend fun uploadDocument(
@@ -30,12 +32,11 @@ interface ApiService {
         @Part("category") category: RequestBody,
         @Part("description") description: RequestBody,
         @Part("tags") tags: RequestBody
-    ): Any
+    ): UploadResponse
 
     @GET("api/documents")
     suspend fun getDocuments(): List<Document>
 
-    // CẬP NHẬT: Backend đã dùng optionalVerifyToken, không cần truyền Query userId nữa
     @GET("api/documents/{id}")
     suspend fun getDocumentById(
         @Path("id") id: String
@@ -47,25 +48,24 @@ interface ApiService {
         @Query("category") category: String? = null
     ): List<Document>
 
+    // CẢI TIẾN: Trả về Unit vì chỉ cần biết xóa thành công hay không
     @DELETE("api/documents/{id}")
-    suspend fun deleteDocument(@Path("id") id: String): Any
+    suspend fun deleteDocument(@Path("id") id: String): Unit
 
     // =======================================================
     // 2. TƯƠNG TÁC (FAVORITE / WATCH LATER)
     // =======================================================
 
-    // CẬP NHẬT: Backend tự trích xuất UID từ Token, không cần gửi RequestBody nữa
     @POST("api/documents/{id}/favorite")
-    suspend fun toggleFavorite(@Path("id") id: String): Any
+    suspend fun toggleFavorite(@Path("id") id: String): Unit
 
     @POST("api/documents/{id}/watch-later")
-    suspend fun toggleWatchLater(@Path("id") id: String): Any
+    suspend fun toggleWatchLater(@Path("id") id: String): Unit
 
     // =======================================================
     // 3. DANH SÁCH CÁ NHÂN
     // =======================================================
 
-    // ĐÃ FIX LỖI BẢO MẬT: Bỏ {authorName}, Endpoint chỉ còn /api/my-documents
     @GET("api/my-documents")
     suspend fun getMyDocuments(): List<Document>
 
