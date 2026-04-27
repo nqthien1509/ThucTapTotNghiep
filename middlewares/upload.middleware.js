@@ -6,7 +6,7 @@ const fs = require('fs');
 const uploadDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-// Cấu hình nơi lưu và tên file (đã sanitize để chống lỗi ký tự lạ)
+// 1. Cấu hình nơi lưu và tên file
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, 'uploads/'),
     filename: (req, file, cb) => {
@@ -15,53 +15,42 @@ const storage = multer.diskStorage({
     }
 });
 
-// Bộ lọc file chung: Chấp nhận PDF và tất cả các loại Ảnh
-const upload = multer({ 
-    storage: storage, 
-    limits: { fileSize: 20 * 1024 * 1024 }, // Tối đa 20MB
-    fileFilter: (req, file, cb) => {
-        if (file.mimetype === 'application/pdf' || file.mimetype.startsWith('image/')) {
-            cb(null, true);
-        } else {
-            cb(new Error('INVALID_TYPE'), false);
-        }
+// 2. TẠO BỘ LỌC ĐỘC LẬP
+// Bộ lọc CHỈ cho phép PDF
+const pdfFilter = (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+        cb(null, true);
+    } else {
+        cb(new Error('INVALID_FILE_TYPE: Chỉ cho phép định dạng PDF!'), false);
     }
+};
+
+// Bộ lọc CHỈ cho phép Hình ảnh
+const imageFilter = (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+    } else {
+        cb(new Error('INVALID_FILE_TYPE: Chỉ cho phép định dạng hình ảnh!'), false);
+    }
+};
+
+// 3. KHỞI TẠO 2 INSTANCE MULTER RIÊNG BIỆT
+// Dung lượng tối đa: PDF 25MB
+const uploadPdf = multer({ 
+    storage: storage, 
+    fileFilter: pdfFilter,
+    limits: { fileSize: 25 * 1024 * 1024 } 
 });
 
-// ==========================================
-// 1. MIDDLEWARE: UPLOAD TÀI LIỆU (PDF)
-// Bắt file từ field name là 'file'
-// ==========================================
-const uploadPdf = (req, res, next) => {
-    upload.single('file')(req, res, function (err) {
-        if (err instanceof multer.MulterError) {
-            // SỬA: 10MB thành 20MB để khớp với limits ở trên
-            if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ message: 'File quá lớn! Tối đa 20MB.' });
-            return res.status(400).json({ message: 'Lỗi upload: ' + err.message });
-        } else if (err) {
-            if (err.message === 'INVALID_TYPE') return res.status(400).json({ message: 'Chỉ cho phép tải lên file định dạng PDF hoặc Ảnh!' });
-            return res.status(400).json({ message: err.message });
-        }
-        next();
-    });
-};
+// Dung lượng tối đa: Ảnh 5MB
+const uploadImage = multer({ 
+    storage: storage, 
+    fileFilter: imageFilter,
+    limits: { fileSize: 5 * 1024 * 1024 } 
+});
 
-// ==========================================
-// 2. MIDDLEWARE: UPLOAD ẢNH ĐẠI DIỆN (IMAGE)
-// Bắt file từ field name là 'avatar'
-// ==========================================
-const uploadImage = (req, res, next) => {
-    upload.single('avatar')(req, res, function (err) {
-        if (err instanceof multer.MulterError) {
-            // SỬA: 10MB thành 20MB
-            if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ message: 'Ảnh quá lớn! Tối đa 20MB.' });
-            return res.status(400).json({ message: 'Lỗi upload ảnh: ' + err.message });
-        } else if (err) {
-            if (err.message === 'INVALID_TYPE') return res.status(400).json({ message: 'Chỉ cho phép tải lên định dạng Ảnh!' });
-            return res.status(400).json({ message: err.message });
-        }
-        next();
-    });
+// 4. EXPORT CÁC MIDDLEWARE
+module.exports = {
+    uploadPdf,
+    uploadImage
 };
-
-module.exports = { uploadPdf, uploadImage };

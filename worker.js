@@ -58,12 +58,14 @@ async function processMessage(data) {
     logger.info({ requestId, documentId }, `[v] Nhan Job xu ly tai lieu: ${title}`);
     logger.debug({ requestId, documentId }, '--- Dang gia lap quet Virus va phan tich PDF ---');
 
+    // Giả lập xử lý mất thời gian
     await new Promise((resolve) => setTimeout(resolve, 7000));
 
+    // [CẢI TIẾN 1]: Sửa returnDocument thành new: true (Chuẩn Mongoose)
     const updatedDoc = await Document.findByIdAndUpdate(
         documentId,
         { status: 'verified' },
-        { returnDocument: 'after' }
+        { new: true } 
     );
 
     if (!updatedDoc) {
@@ -77,7 +79,10 @@ async function processMessage(data) {
         return;
     }
 
-    const topicName = `user_${String(userId).replace(/[^a-zA-Z0-9_\-]/g, '_')}`;
+    // [CẢI TIẾN 2]: Trim khoảng trắng thừa để an toàn tuyệt đối
+    const sanitizedUid = String(userId).trim().replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const topicName = `user_${sanitizedUid}`;
+    
     const message = {
         notification: {
             title: 'Kiem duyet hoan tat!',
@@ -90,8 +95,13 @@ async function processMessage(data) {
         topic: topicName
     };
 
-    await admin.messaging().send(message);
-    logger.info({ requestId, documentId, topicName }, 'Da gui thong bao thanh cong');
+    // [CẢI TIẾN 3]: Bọc try-catch để lỗi FCM không làm hỏng toàn bộ Job duyệt tài liệu
+    try {
+        await admin.messaging().send(message);
+        logger.info({ requestId, documentId, topicName }, 'Da gui thong bao thanh cong');
+    } catch (fcmError) {
+        logger.error({ requestId, documentId, topicName, err: fcmError.message }, 'Loi gui Push Notification (Tai lieu van xac thuc thanh cong)');
+    }
 }
 
 async function startWorker() {
@@ -123,7 +133,7 @@ async function startWorker() {
                 await processMessage(data);
                 channel.ack(msg);
             } catch (err) {
-                logger.error({ requestId, documentId: data.documentId, retry: currentRetry, err }, 'Loi xu ly job');
+                logger.error({ requestId, documentId: data.documentId, retry: currentRetry, err: err.message }, 'Loi xu ly job');
 
                 if (currentRetry < MAX_RETRIES) {
                     const retriedTo = await requeueWithRetry(channel, data);

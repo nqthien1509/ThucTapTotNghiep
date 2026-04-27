@@ -14,6 +14,7 @@ const admin = require('firebase-admin');
 
 const userRoutes = require('./routes/user.routes');
 const documentRoutes = require('./routes/document.routes');
+const Document = require('./models/Document');
 
 const logger = pino({ level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' });
 const loggerMiddleware = pinoHttp({
@@ -55,7 +56,25 @@ app.use(cors(corsOptions));
 app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ limit: '25mb', extended: true }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+app.get('/uploads/:filename', async (req, res, next) => {
+    try {
+        const filename = req.params.filename;
+        const doc = await Document.findOne({ fileUrl: '/uploads/' + filename });
+
+        if (!doc) {
+            return res.status(404).json({ message: 'File không tồn tại!' });
+        }
+
+        if (doc.status === 'verified') {
+            return res.sendFile(path.join(__dirname, 'uploads', filename));
+        }
+
+        return res.status(403).json({ message: 'Tài liệu chưa được kiểm duyệt hoặc đã bị từ chối!' });
+    } catch (error) {
+        next(error);
+    }
+});
 
 mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/thuctaptotnghiep_db')
     .then(() => logger.info('Da ket noi MongoDB!'))
@@ -84,6 +103,16 @@ app.use('/api/user', userRoutes);
 app.use('/api', documentRoutes);
 
 app.use((err, req, res, next) => {
+    // [CẬP NHẬT]: Bắt lỗi từ bộ lọc Multer (Sai định dạng)
+    if (err.message && err.message.startsWith('INVALID_FILE_TYPE')) {
+        return res.status(400).json({ message: err.message.split(': ')[1] });
+    }
+    
+    // [CẬP NHẬT]: Bắt lỗi file quá lớn của Multer (Vượt dung lượng)
+    if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'Dung lượng file vượt quá giới hạn cho phép.' });
+    }
+
     if (err.message === 'CORS_NOT_ALLOWED') {
         return res.status(403).json({ message: 'Origin khong duoc phep truy cap API.' });
     }

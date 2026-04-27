@@ -5,7 +5,8 @@ const { verifyToken, optionalVerifyToken } = require('../middlewares/auth.middle
 const { uploadPdf } = require('../middlewares/upload.middleware');
 const { body } = require('express-validator');
 
-router.post('/upload', verifyToken, uploadPdf, [
+// [CẬP NHẬT]: Sử dụng uploadPdf.single('file')
+router.post('/upload', verifyToken, uploadPdf.single('file'), [
     body('title').notEmpty().isLength({ max: 100 }),
     body('subject').notEmpty().isLength({ max: 50 }),
     body('category').isIn(['Slide', 'Đề thi', 'Giáo trình'])
