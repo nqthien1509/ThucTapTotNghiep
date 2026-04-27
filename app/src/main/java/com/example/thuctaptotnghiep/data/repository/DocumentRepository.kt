@@ -1,6 +1,7 @@
 package com.example.thuctaptotnghiep.data.repository
 
 import com.example.thuctaptotnghiep.data.model.Document
+import com.example.thuctaptotnghiep.data.model.UploadResponse // <-- THÊM IMPORT NÀY
 import com.example.thuctaptotnghiep.data.model.User
 import com.example.thuctaptotnghiep.data.network.ApiService
 import okhttp3.MultipartBody
@@ -20,6 +21,7 @@ class DocumentRepository @Inject constructor(
         return apiService.getDocuments()
     }
 
+    // CẢI TIẾN QUAN TRỌNG: Trả về UploadResponse để khớp với ApiService và JSON từ Backend
     suspend fun uploadDocument(
         file: MultipartBody.Part,
         title: RequestBody,
@@ -28,7 +30,7 @@ class DocumentRepository @Inject constructor(
         category: RequestBody,
         description: RequestBody,
         tags: RequestBody
-    ): Any {
+    ): UploadResponse { // <-- ĐỔI THÀNH UploadResponse
         return apiService.uploadDocument(
             file, title, authorName, subject, category, description, tags
         )
@@ -45,17 +47,14 @@ class DocumentRepository @Inject constructor(
     // 3. CHI TIẾT & TƯƠNG TÁC (Dành cho DetailViewModel)
     // ==========================================
 
-    // Đã xóa userId vì Backend tự lấy từ Token
     suspend fun getDocumentById(id: String): Document {
         return apiService.getDocumentById(id)
     }
 
-    // Đã xóa Map body vì Backend tự lấy userId từ Token
     suspend fun toggleFavorite(documentId: String) {
         apiService.toggleFavorite(documentId)
     }
 
-    // Đã xóa Map body vì Backend tự lấy userId từ Token
     suspend fun toggleWatchLater(documentId: String) {
         apiService.toggleWatchLater(documentId)
     }
@@ -64,7 +63,6 @@ class DocumentRepository @Inject constructor(
     // 4. DANH SÁCH CÁ NHÂN & QUẢN LÝ (Dành cho ProfileViewModel)
     // ==========================================
 
-    // Đã xóa authorName để bảo mật, Backend tự định danh qua Token
     suspend fun getMyDocuments(): List<Document> {
         return apiService.getMyDocuments()
     }

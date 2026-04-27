@@ -1,5 +1,6 @@
 package com.example.thuctaptotnghiep.ui.components
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -9,9 +10,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
-// Nút nổi Upload
+// ==========================================
+// NÚT NỔI UPLOAD
+// ==========================================
 @Composable
 fun UploadButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     FloatingActionButton(
@@ -26,14 +36,19 @@ fun UploadButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-// Thanh điều hướng dưới đáy dùng chung cho toàn App
+// ==========================================
+// THANH ĐIỀU HƯỚNG DƯỚI ĐÁY DÙNG CHUNG CỦA APP
+// ==========================================
 @Composable
 fun AppBottomNavigationBar(
-    onHomeClick: () -> Unit, // Thêm nút Home
+    currentRoute: String? = null, // CẢI TIẾN 1: Nhận diện màn hình hiện tại (mặc định null để không báo lỗi code cũ)
+    onHomeClick: () -> Unit,
     onUploadClick: () -> Unit,
     onProfileClick: () -> Unit,
     onSearchClick: () -> Unit
 ) {
+    val context = LocalContext.current // Dùng để hiển thị Toast
+
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.BottomCenter
@@ -46,30 +61,51 @@ fun AppBottomNavigationBar(
         ) {
             NavigationBarItem(
                 icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                selected = false, // Tạm thời để false hết để dùng chung nhiều trang
-                colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFF4C9EEB), unselectedIconColor = Color.Gray, indicatorColor = Color.White),
-                onClick = onHomeClick // Gắn sự kiện về Home
-            )
-            NavigationBarItem(
-                icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-                selected = false,
-                colors = NavigationBarItemDefaults.colors(unselectedIconColor = Color.Gray),
-                onClick = onSearchClick
+                selected = currentRoute == "home", // Làm sáng nếu đang ở Home
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF4C9EEB),
+                    unselectedIconColor = Color.Gray,
+                    indicatorColor = Color(0xFFE3F2FD) // Màu nền nhạt phía sau icon khi được chọn
+                ),
+                onClick = { if (currentRoute != "home") onHomeClick() } // Tránh load lại trang nếu đang ở chính nó
             )
 
-            Spacer(modifier = Modifier.weight(1.5f))
+            NavigationBarItem(
+                icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                selected = currentRoute == "search", // Làm sáng nếu đang ở Search
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF4C9EEB),
+                    unselectedIconColor = Color.Gray,
+                    indicatorColor = Color(0xFFE3F2FD)
+                ),
+                onClick = { if (currentRoute != "search") onSearchClick() }
+            )
+
+            Spacer(modifier = Modifier.weight(1.5f)) // Khoảng trống cho nút Upload ở giữa
 
             NavigationBarItem(
                 icon = { Icon(Icons.Default.Notifications, contentDescription = "Notifications") },
-                selected = false,
-                colors = NavigationBarItemDefaults.colors(unselectedIconColor = Color.Gray),
-                onClick = {}
+                selected = currentRoute == "notifications",
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF4C9EEB),
+                    unselectedIconColor = Color.Gray,
+                    indicatorColor = Color(0xFFE3F2FD)
+                ),
+                onClick = {
+                    // CẢI TIẾN 2: Hiển thị Toast thay vì nút "chết"
+                    Toast.makeText(context, "Tính năng thông báo đang được phát triển!", Toast.LENGTH_SHORT).show()
+                }
             )
+
             NavigationBarItem(
                 icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
-                selected = false,
-                colors = NavigationBarItemDefaults.colors(unselectedIconColor = Color.Gray),
-                onClick = onProfileClick
+                selected = currentRoute == "profile", // Làm sáng nếu đang ở Profile
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF4C9EEB),
+                    unselectedIconColor = Color.Gray,
+                    indicatorColor = Color(0xFFE3F2FD)
+                ),
+                onClick = { if (currentRoute != "profile") onProfileClick() }
             )
         }
 
@@ -77,5 +113,93 @@ fun AppBottomNavigationBar(
             onClick = onUploadClick,
             modifier = Modifier.offset(y = (-30).dp)
         )
+    }
+}
+
+// ==========================================
+// TRẠNG THÁI ĐANG TẢI (LOADING)
+// ==========================================
+@Composable
+fun LoadingStateView(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            // Bổ sung semantics để TalkBack đọc khi đang tải
+            .semantics { contentDescription = "Đang tải dữ liệu, vui lòng đợi" },
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator(color = Color(0xFF4C9EEB))
+    }
+}
+
+// ==========================================
+// TRẠNG THÁI RỖNG (EMPTY)
+// ==========================================
+@Composable
+fun EmptyStateView(
+    message: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector = Icons.Default.Inbox
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(32.dp)
+            .semantics(mergeDescendants = true) { }, // Gộp để đọc mạch lạc
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Icon trang trí, size lớn hơn để đỡ trống trải
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.LightGray,
+            modifier = Modifier.size(80.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = message,
+            color = Color.Gray,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+// ==========================================
+// TRẠNG THÁI LỖI (ERROR)
+// ==========================================
+@Composable
+fun ErrorStateView(
+    errorMessage: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.ErrorOutline,
+            contentDescription = null,
+            tint = Color(0xFFF44336),
+            modifier = Modifier.size(64.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(text = "Đã xảy ra lỗi", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(text = errorMessage, color = Color.Gray, textAlign = TextAlign.Center)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(
+            onClick = onRetry,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4C9EEB))
+        ) {
+            Text("Thử lại", fontWeight = FontWeight.Bold)
+        }
     }
 }

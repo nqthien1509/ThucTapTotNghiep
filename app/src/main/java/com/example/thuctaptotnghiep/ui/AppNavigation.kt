@@ -1,6 +1,7 @@
 package com.example.thuctaptotnghiep.ui
 
 import androidx.compose.runtime.Composable
+import androidx.navigation.NavGraph.Companion.findStartDestination // Bổ sung import để lấy node gốc
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -24,16 +25,17 @@ fun AppNavigation() {
     val startRoute = if (currentUser != null) "home" else "login"
 
     // =======================================================
-    // HÀM TỐI ƯU ĐIỀU HƯỚNG BOTTOM BAR (CHỐNG TRÀN BỘ NHỚ)
+    // HÀM TỐI ƯU ĐIỀU HƯỚNG BOTTOM BAR (CHUẨN GOOGLE)
     // =======================================================
     val navigateToBottomTab = { route: String ->
         navController.navigate(route) {
-            // Quay về "home" làm gốc để không tạo ra chuỗi màn hình dài dằng dặc
-            popUpTo("home") {
-                saveState = true // Lưu lại trạng thái của tab (VD: người dùng đang cuộn tới đâu)
+            // CẢI TIẾN: Thay vì hard-code chuỗi "home", dùng findStartDestination().id
+            // Giúp dọn dẹp Back Stack an toàn tuyệt đối bất kể màn hình khởi đầu là gì.
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true // Lưu lại trạng thái của tab bị đè
             }
             launchSingleTop = true // Không mở thêm màn hình mới nếu đã đang ở đúng tab đó
-            restoreState = true    // Phục hồi lại trạng thái cũ khi quay lại
+            restoreState = true    // Phục hồi lại trạng thái cũ khi quay lại (VD: Vị trí cuộn trang)
         }
     }
 
@@ -73,7 +75,11 @@ fun AppNavigation() {
                 onNavigateToUpload = { navigateToBottomTab("upload") },
                 onDocumentClick = { id -> navController.navigate("document_detail/$id") },
                 onProfileClick = { navigateToBottomTab("profile") },
-                onSearchClick = { navigateToBottomTab("search") }
+                onSearchClick = { navigateToBottomTab("search") },
+                // Bắt sự kiện Xem tất cả và truyền category sang màn Search
+                onNavigateToSeeAll = { category ->
+                    navController.navigate("search?category=$category")
+                }
             )
         }
 
@@ -101,19 +107,19 @@ fun AppNavigation() {
                 onHomeClick = { navigateToBottomTab("home") },
                 onUploadClick = { /* Đang ở chính nó */ },
                 onProfileClick = { navigateToBottomTab("profile") },
-                onSearchClick = { navigateToBottomTab("search") }
+                onSearchClick = { navigateToBottomTab("search") },
+                onNavigateToDetail = { id -> navController.navigate("document_detail/$id") }
             )
         }
 
         // 6. Màn hình Hồ sơ (Profile)
         composable("profile") {
             ProfileScreen(
-                // Do ProfileScreen gắn onBackClick vào nút Home ở thanh dưới, ta truyền hàm về trang chủ
                 onBackClick = { navigateToBottomTab("home") },
                 onLogoutClick = {
                     FirebaseAuth.getInstance().signOut()
                     navController.navigate("login") {
-                        // popUpTo(navController.graph.id) là lệnh mạnh nhất để xóa sạch 100% Back Stack
+                        // Lệnh mạnh nhất để xóa sạch 100% Back Stack khi đăng xuất
                         popUpTo(navController.graph.id) { inclusive = true }
                     }
                 },
@@ -126,8 +132,17 @@ fun AppNavigation() {
         }
 
         // 7. Màn hình Tìm kiếm (Search)
-        composable("search") {
+        composable(
+            route = "search?category={category}",
+            arguments = listOf(navArgument("category") {
+                type = NavType.StringType
+                nullable = true
+            })
+        ) { backStackEntry ->
+            val category = backStackEntry.arguments?.getString("category")
+
             SearchScreen(
+                initialCategory = category,
                 onBackClick = { navController.popBackStack() },
                 onDocumentClick = { id -> navController.navigate("document_detail/$id") },
                 onHomeClick = { navigateToBottomTab("home") },

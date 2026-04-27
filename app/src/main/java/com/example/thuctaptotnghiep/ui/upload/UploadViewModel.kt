@@ -5,9 +5,11 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.thuctaptotnghiep.data.repository.DocumentRepository // CẬP NHẬT: Dùng Repository
+import com.example.thuctaptotnghiep.data.repository.DocumentRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,8 +19,8 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject // Thêm để parse chuỗi lỗi JSON
-import retrofit2.HttpException // Thêm để bắt lỗi HTTP (400, 404, 500...)
+import org.json.JSONObject
+import retrofit2.HttpException
 import java.io.File
 import java.io.FileOutputStream
 import javax.inject.Inject
@@ -26,17 +28,28 @@ import javax.inject.Inject
 sealed class UploadState {
     object Idle : UploadState()
     object Loading : UploadState()
-    object Success : UploadState()
+    data class Success(val documentId: String) : UploadState()
     data class Error(val message: String) : UploadState()
 }
 
 @HiltViewModel
 class UploadViewModel @Inject constructor(
-    private val repository: DocumentRepository // TIÊM REPOSITORY VÀO ĐÂY
+    private val repository: DocumentRepository
 ) : ViewModel() {
 
     private val _uploadState = MutableStateFlow<UploadState>(UploadState.Idle)
     val uploadState: StateFlow<UploadState> = _uploadState.asStateFlow()
+
+    private val _uploadProgress = MutableStateFlow(0f)
+    val uploadProgress: StateFlow<Float> = _uploadProgress.asStateFlow()
+
+    private var progressJob: Job? = null
+
+    private fun isValidText(text: String): Boolean {
+        // Chỉ cho phép chữ, số, tiếng Việt, khoảng trắng và các dấu phẩy, chấm, gạch ngang
+        val safePattern = "^[a-zA-Z0-9_ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼỀỀỂưăạảấầẩẫậắằẳẵặẹẻẽềềểỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪễệỉịọỏốồổỗộớờởỡợụủứừỬỮỰỲỴÝỶỸửữựỳỵỷỹ\\s\\-\\.,]+$"
+        return text.matches(safePattern.toRegex())
+    }
 
     fun uploadDocument(
         context: Context,
@@ -48,18 +61,28 @@ class UploadViewModel @Inject constructor(
         description: String,
         tags: String
     ) {
+        // Ràng buộc Validate
+        if (title.isBlank() || subject.isBlank() || tags.isBlank()) {
+            _uploadState.value = UploadState.Error("Vui lòng nhập đầy đủ các trường thông tin!")
+            return
+        }
+        if (!isValidText(title) || !isValidText(subject) || !isValidText(tags)) {
+            _uploadState.value = UploadState.Error("Thông tin chứa ký tự đặc biệt không hợp lệ!")
+            return
+        }
+
         viewModelScope.launch {
             _uploadState.value = UploadState.Loading
+            startSimulatedProgress() // Kích hoạt hiệu ứng chạy phần trăm
 
             try {
-                // Chuyển URI thành File ngầm
                 val file = uriToFile(context, uri)
 
                 if (file != null) {
-                    // 🔴 CHẶN FILE 0MB TỪ APP
                     if (file.length() == 0L) {
-                        file.delete() // Xóa file rỗng
-                        _uploadState.value = UploadState.Error("File bị rỗng (0 bytes). Vui lòng tải hẳn file xuống máy trước khi chọn!")
+                        file.delete()
+                        stopSimulatedProgress()
+                        _uploadState.value = UploadState.Error("File bị rỗng (0 bytes). Vui lòng kiểm tra lại file!")
                         return@launch
                     }
 
@@ -72,31 +95,37 @@ class UploadViewModel @Inject constructor(
                     val descBody = description.toRequestBody("text/plain".toMediaTypeOrNull())
                     val tagsBody = tags.toRequestBody("text/plain".toMediaTypeOrNull())
 
-                    // Gọi API thông qua Repository
-                    repository.uploadDocument(
+                    // Gọi API thông qua Repository (trả về UploadResponse)
+                    val result = repository.uploadDocument(
                         file = filePart, title = titleBody, authorName = authorBody,
                         subject = subjectBody, category = categoryBody, description = descBody, tags = tagsBody
                     )
 
-                    _uploadState.value = UploadState.Success
-                    file.delete() // Xóa file tạm sau khi upload xong
+                    stopSimulatedProgress() // Đẩy thanh upload lên 100%
+
+                    // ==========================================
+                    // CẢI TIẾN: Trích xuất ID thật từ wrapper UploadResponse
+                    // ==========================================
+                    val realDocumentId = result.document.id
+
+                    _uploadState.value = UploadState.Success(documentId = realDocumentId)
+                    file.delete()
                 } else {
-                    _uploadState.value = UploadState.Error("Không thể đọc được file PDF.")
+                    stopSimulatedProgress()
+                    _uploadState.value = UploadState.Error("Không thể đọc được file PDF từ thiết bị.")
                 }
             } catch (e: Exception) {
-                // 🔴 MÓC LỖI TỪ BACKEND ĐỂ HIỂN THỊ
+                stopSimulatedProgress()
                 if (e is HttpException) {
                     val errorBody = e.response()?.errorBody()?.string()
                     Log.e("UploadError", "Lỗi từ Backend: $errorBody")
 
-                    // Cố gắng parse JSON để lấy cái "message", nếu lỗi parse thì in nguyên cục
                     val errorMessage = try {
                         val jsonObject = JSONObject(errorBody ?: "")
                         jsonObject.getString("message")
                     } catch (jsonEx: Exception) {
                         errorBody ?: "Lỗi xác thực dữ liệu đầu vào (400)"
                     }
-
                     _uploadState.value = UploadState.Error(errorMessage)
                 } else {
                     _uploadState.value = UploadState.Error("Lỗi kết nối: ${e.message}")
@@ -106,10 +135,30 @@ class UploadViewModel @Inject constructor(
     }
 
     fun resetState() {
+        progressJob?.cancel()
+        _uploadProgress.value = 0f
         _uploadState.value = UploadState.Idle
     }
 
-    // Hàm tiện ích nội bộ chuyển URI sang File
+    // --- UX Logic: Giả lập thanh phần trăm tải lên ---
+    private fun startSimulatedProgress() {
+        _uploadProgress.value = 0f
+        progressJob = viewModelScope.launch {
+            var progress = 0f
+            // Chạy tà tà lên 90% rồi dừng đợi server phản hồi
+            while (progress < 0.9f) {
+                delay(400)
+                progress += 0.05f
+                _uploadProgress.value = progress
+            }
+        }
+    }
+
+    private fun stopSimulatedProgress() {
+        progressJob?.cancel()
+        _uploadProgress.value = 1f // Đẩy thẳng lên 100%
+    }
+
     private suspend fun uriToFile(context: Context, uri: Uri): File? = withContext(Dispatchers.IO) {
         val tempFile = File(context.cacheDir, "temp_upload_${System.currentTimeMillis()}.pdf")
         try {

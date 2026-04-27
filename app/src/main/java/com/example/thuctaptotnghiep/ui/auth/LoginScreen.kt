@@ -1,29 +1,32 @@
 package com.example.thuctaptotnghiep.ui.auth
 
 import android.widget.Toast
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons // Bổ sung import cho Icon
+import androidx.compose.material.icons.filled.Visibility // Bổ sung import cho Icon Visibility
+import androidx.compose.material.icons.filled.VisibilityOff // Bổ sung import cho Icon VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation // Bổ sung import VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.thuctaptotnghiep.R
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
-    viewModel: AuthViewModel = viewModel(), // Tiêm ViewModel
+    viewModel: AuthViewModel = hiltViewModel(), // Sử dụng hiltViewModel ở đây
     onLoginSuccess: () -> Unit,
     onNavigateToRegister: () -> Unit
 ) {
@@ -31,19 +34,17 @@ fun LoginScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
-    // Lắng nghe trạng thái từ ViewModel
+    // Cải tiến: Thêm state quản lý ẩn/hiện mật khẩu
+    var passwordVisible by remember { mutableStateOf(false) }
+
     val isLoading by viewModel.isLoading.collectAsState()
     val authMessage by viewModel.authMessage.collectAsState()
     val isAuthSuccess by viewModel.isAuthSuccess.collectAsState()
 
-    // Xử lý chuyển màn hình khi đăng nhập thành công
     LaunchedEffect(isAuthSuccess) {
-        if (isAuthSuccess) {
-            onLoginSuccess()
-        }
+        if (isAuthSuccess) onLoginSuccess()
     }
 
-    // Hiển thị thông báo (Lỗi hoặc Thành công)
     LaunchedEffect(authMessage) {
         authMessage?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
@@ -51,14 +52,21 @@ fun LoginScreen(
         }
     }
 
-    Box(
+    // Thay thế Box bằng Column và thêm các Modifier xử lý Insets/Scroll
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFE3F2FD)), // Màu nền xanh nhạt
-        contentAlignment = Alignment.Center
+            .background(Color(0xFFE3F2FD))
+            .safeDrawingPadding() // Tránh đè lên status bar & navigation bar
+            .verticalScroll(rememberScrollState()) // Cho phép cuộn khi bàn phím bật
+            .imePadding(), // Đẩy nội dung lên khi bàn phím xuất hiện
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center // Giữ Card ở giữa màn hình
     ) {
         Card(
-            modifier = Modifier.fillMaxWidth(0.85f),
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .padding(vertical = 24.dp), // Thêm khoảng cách an toàn khi cuộn
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
@@ -86,11 +94,20 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Cải tiến: Cập nhật UI ô Mật khẩu để có nút hiện/ẩn
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
                     label = { Text("Mật khẩu") },
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                        val description = if (passwordVisible) "Ẩn mật khẩu" else "Hiện mật khẩu"
+
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(imageVector = image, contentDescription = description)
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -102,7 +119,7 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4C9EEB)),
-                    enabled = !isLoading // Vô hiệu hóa nút khi đang tải
+                    enabled = !isLoading
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))

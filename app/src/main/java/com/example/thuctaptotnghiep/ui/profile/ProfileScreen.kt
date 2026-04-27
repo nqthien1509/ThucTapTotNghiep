@@ -26,16 +26,25 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel // <-- CẬP NHẬT: Import Hilt
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.thuctaptotnghiep.data.model.Document
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
 import com.google.firebase.auth.FirebaseAuth
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import com.example.thuctaptotnghiep.ui.components.EmptyStateView
+import com.example.thuctaptotnghiep.ui.components.LoadingStateView
+import com.example.thuctaptotnghiep.utils.toFullUrl // Import hàm xử lý URL
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,31 +54,34 @@ fun ProfileScreen(
     onSearchClick: () -> Unit,
     onUploadClick: () -> Unit,
     onDocumentClick: (String) -> Unit,
-    viewModel: ProfileViewModel = hiltViewModel() // <-- CẬP NHẬT: Dùng hiltViewModel() và đưa xuống cuối
+    viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
 
+    // CẢI TIẾN: Lắng nghe danh sách và các ID đang chờ xóa (Undo)
     val myDocuments by viewModel.myDocuments.collectAsState()
     val favoriteDocuments by viewModel.favoriteDocuments.collectAsState()
     val watchLaterDocuments by viewModel.watchLaterDocuments.collectAsState()
+    val pendingDeleteIds by viewModel.pendingDeleteIds.collectAsState()
 
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val deleteStatus by viewModel.deleteStatus.collectAsState()
 
-    // STATE: THÔNG TIN USER VÀ DIALOG EDIT
     val userProfile by viewModel.userProfile.collectAsState()
-    var showEditProfileDialog by remember { mutableStateOf(false) }
 
-    // STATE: BOTTOM SHEET CÀI ĐẶT
+    // Khai báo Snackbar cho tính năng Hoàn tác
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+
+    var showEditProfileDialog by remember { mutableStateOf(false) }
     var showBottomSheet by remember { mutableStateOf(false) }
     var showChangePasswordDialog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("Tài liệu đã đăng", "Yêu thích", "Xem sau")
-    var documentToDelete by remember { mutableStateOf<Document?>(null) }
 
     val currentList = when (selectedTabIndex) {
         0 -> myDocuments
@@ -77,13 +89,9 @@ fun ProfileScreen(
         else -> watchLaterDocuments
     }
 
-    // ==========================================
-    // CÔNG CỤ CHỌN ẢNH TỪ ĐIỆN THOẠI
-    // ==========================================
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        // Ngay khi chọn ảnh xong, gọi hàm upload (Up ngay lập tức)
         uri?.let { viewModel.uploadAvatar(context, viewModel.userId, it) }
     }
 
@@ -96,6 +104,7 @@ fun ProfileScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }, // Gắn SnackbarHost vào Scaffold
         bottomBar = {
             AppBottomNavigationBar(
                 onHomeClick = onBackClick,
@@ -107,37 +116,53 @@ fun ProfileScreen(
         containerColor = Color(0xFFF8F9FA)
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+
+            val configuration = LocalConfiguration.current
+            val screenHeight = configuration.screenHeightDp.dp
+            val headerHeight = screenHeight * 0.28f
+
             // Header lượn sóng
-            Box(modifier = Modifier.fillMaxWidth().height(220.dp)) {
+            Box(modifier = Modifier.fillMaxWidth().height(headerHeight)) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val path = Path().apply {
-                        lineTo(0f, size.height - 60f)
-                        quadraticBezierTo(size.width * 0.4f, size.height + 20f, size.width, size.height - 100f)
+                        lineTo(0f, size.height * 0.75f)
+                        quadraticBezierTo(size.width * 0.4f, size.height + 20f, size.width, size.height * 0.6f)
                         lineTo(size.width, 0f)
                         close()
                     }
                     drawPath(path, Color(0xFF4C9EEB))
                 }
 
-                // NÚT CÀI ĐẶT MỞ BOTTOM SHEET
-                Box(modifier = Modifier.align(Alignment.TopEnd).padding(top = 40.dp, end = 16.dp)) {
-                    IconButton(
-                        onClick = { showBottomSheet = true },
-                        modifier = Modifier.background(Color.White.copy(alpha = 0.2f), CircleShape).size(36.dp)
-                    ) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White, modifier = Modifier.size(20.dp))
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(top = 12.dp, end = 16.dp)
+                ) {
+                    IconButton(onClick = { showBottomSheet = true }) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(Color.White.copy(alpha = 0.2f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Settings, contentDescription = "Cài đặt", tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
 
-                // KHỐI THÔNG TIN USER VÀ AVATAR
                 Row(
-                    modifier = Modifier.align(Alignment.TopStart).padding(top = 50.dp, start = 24.dp).fillMaxWidth().padding(end = 60.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .statusBarsPadding()
+                        .padding(top = 16.dp, start = 24.dp)
+                        .fillMaxWidth()
+                        .padding(end = 60.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val displayUserName = userProfile?.displayName?.takeIf { it.isNotBlank() } ?: viewModel.userName
                     val displaySchool = userProfile?.school?.takeIf { it.isNotBlank() } ?: "Sinh viên UTH"
 
-                    // Khung ảnh
                     Box(
                         modifier = Modifier
                             .size(70.dp)
@@ -146,10 +171,11 @@ fun ProfileScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         if (!userProfile?.avatarUrl.isNullOrBlank()) {
-                            val fullImageUrl = "http://10.0.2.2:3000${userProfile!!.avatarUrl}"
+                            // CẢI TIẾN: Sử dụng toFullUrl() thay cho IP cứng
+                            val fullImageUrl = userProfile?.avatarUrl?.toFullUrl()
                             AsyncImage(
                                 model = fullImageUrl,
-                                contentDescription = "Avatar",
+                                contentDescription = "Ảnh đại diện của $displayUserName",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
@@ -176,7 +202,11 @@ fun ProfileScreen(
                 }
 
                 Box(
-                    modifier = Modifier.align(Alignment.BottomCenter).offset(y = (-10).dp).background(Color.White, RoundedCornerShape(20.dp)).padding(horizontal = 20.dp, vertical = 8.dp)
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .offset(y = (-10).dp)
+                        .background(Color.White, RoundedCornerShape(20.dp))
+                        .padding(horizontal = 20.dp, vertical = 8.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.EmojiEvents, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(18.dp))
@@ -209,34 +239,52 @@ fun ProfileScreen(
                     onRefresh = { viewModel.refreshDocuments() },
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    if (isLoading && !isRefreshing) {
-                        CircularProgressIndicator(color = Color(0xFF4C9EEB), modifier = Modifier.align(Alignment.Center))
-                    } else if (currentList.isEmpty()) {
-                        val emptyMessage = when (selectedTabIndex) {
-                            0 -> "Bạn chưa đăng tài liệu nào."
-                            1 -> "Bạn chưa yêu thích tài liệu nào."
-                            else -> "Danh sách xem sau đang trống."
+                    when {
+                        isLoading && !isRefreshing -> {
+                            LoadingStateView()
                         }
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            item {
-                                Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text(emptyMessage, color = Color.Gray)
-                                }
+                        // Lọc các item đang chờ xóa để tính toán xem list có rỗng không
+                        currentList.filter { !pendingDeleteIds.contains(it.id) }.isEmpty() -> {
+                            val emptyMessage = when (selectedTabIndex) {
+                                0 -> "Bạn chưa đăng tài liệu nào."
+                                1 -> "Bạn chưa yêu thích tài liệu nào."
+                                else -> "Danh sách xem sau đang trống."
                             }
+                            EmptyStateView(
+                                message = emptyMessage,
+                                icon = if (selectedTabIndex == 1) Icons.Default.FavoriteBorder else Icons.Default.Inbox
+                            )
                         }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(currentList) { doc ->
-                                ProfileDocumentItem(
-                                    document = doc,
-                                    isOwner = selectedTabIndex == 0,
-                                    onClick = { onDocumentClick(doc.id) },
-                                    onDeleteClick = { documentToDelete = doc }
-                                )
+                        else -> {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                // CẢI TIẾN: Chỉ render các item KHÔNG nằm trong danh sách pendingDeleteIds
+                                val visibleDocs = currentList.filter { !pendingDeleteIds.contains(it.id) }
+
+                                items(visibleDocs, key = { it.id }) { doc ->
+                                    ProfileDocumentItem(
+                                        document = doc,
+                                        isOwner = selectedTabIndex == 0,
+                                        onClick = { onDocumentClick(doc.id) },
+                                        onDeleteClick = {
+                                            // CẢI TIẾN: Gọi tính năng Undo thay vì hiện Dialog xác nhận
+                                            viewModel.deleteDocumentWithUndo(doc.id)
+                                            coroutineScope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message = "Đã xóa tài liệu",
+                                                    actionLabel = "HOÀN TÁC",
+                                                    duration = SnackbarDuration.Short // ~4 giây
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    viewModel.undoDelete(doc.id)
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -257,66 +305,37 @@ fun ProfileScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .navigationBarsPadding()
                         .padding(horizontal = 24.dp, vertical = 8.dp)
                         .padding(bottom = 32.dp)
                 ) {
-                    Text(
-                        text = "Cài đặt tài khoản",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black,
-                        modifier = Modifier.padding(bottom = 24.dp)
-                    )
+                    Text("Cài đặt tài khoản", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black, modifier = Modifier.padding(bottom = 24.dp))
 
                     SettingsMenuItem(
-                        icon = Icons.Default.Edit,
-                        title = "Chỉnh sửa thông tin",
-                        subtitle = "Cập nhật tên, trường học và tiểu sử",
-                        iconTint = Color(0xFF4CAF50),
-                        onClick = {
-                            showBottomSheet = false
-                            showEditProfileDialog = true
-                        }
+                        icon = Icons.Default.Edit, title = "Chỉnh sửa thông tin", subtitle = "Cập nhật tên, trường học và tiểu sử", iconTint = Color(0xFF4CAF50),
+                        onClick = { showBottomSheet = false; showEditProfileDialog = true }
                     )
-
                     Spacer(modifier = Modifier.height(12.dp))
-
                     SettingsMenuItem(
-                        icon = Icons.Default.Lock,
-                        title = "Đổi mật khẩu",
-                        subtitle = "Cập nhật mật khẩu để bảo vệ tài khoản",
-                        iconTint = Color(0xFF4C9EEB),
-                        onClick = {
-                            showBottomSheet = false
-                            showChangePasswordDialog = true
-                        }
+                        icon = Icons.Default.Lock, title = "Đổi mật khẩu", subtitle = "Cập nhật mật khẩu để bảo vệ tài khoản", iconTint = Color(0xFF4C9EEB),
+                        onClick = { showBottomSheet = false; showChangePasswordDialog = true }
                     )
-
                     Spacer(modifier = Modifier.height(16.dp))
                     HorizontalDivider(color = Color(0xFFF0F0F0))
                     Spacer(modifier = Modifier.height(16.dp))
-
                     SettingsMenuItem(
-                        icon = Icons.AutoMirrored.Filled.ExitToApp,
-                        title = "Đăng xuất",
-                        subtitle = "Thoát phiên đăng nhập hiện tại",
-                        iconTint = Color.Red,
-                        titleColor = Color.Red,
-                        onClick = {
-                            showBottomSheet = false
-                            viewModel.logout { onLogoutClick() }
-                        }
+                        icon = Icons.AutoMirrored.Filled.ExitToApp, title = "Đăng xuất", subtitle = "Thoát phiên đăng nhập hiện tại", iconTint = Color.Red, titleColor = Color.Red,
+                        onClick = { showBottomSheet = false; viewModel.logout { onLogoutClick() } }
                     )
                 }
             }
         }
 
-        // =======================================================
+        // ==========================================
         // DIALOG: CHỈNH SỬA THÔNG TIN CÁ NHÂN
-        // =======================================================
+        // ==========================================
         if (showEditProfileDialog) {
             val fallbackEmail = FirebaseAuth.getInstance().currentUser?.email ?: ""
-
             var editName by remember { mutableStateOf(userProfile?.displayName ?: viewModel.userName) }
             var editSchool by remember { mutableStateOf(userProfile?.school ?: "Trường Đại học Giao thông vận tải TP.HCM (UTH)") }
             var editBio by remember { mutableStateOf(userProfile?.bio ?: "") }
@@ -327,86 +346,35 @@ fun ProfileScreen(
                 containerColor = Color.White,
                 title = { Text("Chỉnh sửa hồ sơ", fontWeight = FontWeight.Bold) },
                 text = {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Khu vực đổi ảnh đại diện
+                    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .background(Color(0xFFE3F2FD), CircleShape)
-                                .clip(CircleShape)
-                                .clickable {
-                                    photoPickerLauncher.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                    )
-                                },
+                            modifier = Modifier.size(80.dp).background(Color(0xFFE3F2FD), CircleShape).clip(CircleShape)
+                                .clickable { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                             contentAlignment = Alignment.Center
                         ) {
                             if (!userProfile?.avatarUrl.isNullOrBlank()) {
-                                val fullImageUrl = "http://10.0.2.2:3000${userProfile!!.avatarUrl}"
                                 AsyncImage(
-                                    model = fullImageUrl,
+                                    model = userProfile?.avatarUrl?.toFullUrl(),
                                     contentDescription = "Avatar",
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             } else {
-                                Text(
-                                    text = editName.take(1).uppercase(),
-                                    color = Color(0xFF4C9EEB),
-                                    fontSize = 32.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Text(text = editName.take(1).uppercase(), color = Color(0xFF4C9EEB), fontSize = 32.sp, fontWeight = FontWeight.Bold)
                             }
-
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .background(Color.White, CircleShape)
-                                    .padding(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CameraAlt,
-                                    contentDescription = "Đổi ảnh",
-                                    tint = Color.Gray,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                            Box(modifier = Modifier.align(Alignment.BottomEnd).background(Color.White, CircleShape).padding(4.dp)) {
+                                Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
                             }
                         }
-
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(text = "Chạm để thay đổi ảnh", fontSize = 12.sp, color = Color.Gray)
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Các ô nhập liệu
-                        OutlinedTextField(
-                            value = editName,
-                            onValueChange = { editName = it },
-                            label = { Text("Tên hiển thị") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
+                        OutlinedTextField(value = editName, onValueChange = { editName = it }, label = { Text("Tên hiển thị") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
                         Spacer(modifier = Modifier.height(12.dp))
-                        OutlinedTextField(
-                            value = editSchool,
-                            onValueChange = { editSchool = it },
-                            label = { Text("Trường học") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
+                        OutlinedTextField(value = editSchool, onValueChange = { editSchool = it }, label = { Text("Trường học") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
                         Spacer(modifier = Modifier.height(12.dp))
-                        OutlinedTextField(
-                            value = editBio,
-                            onValueChange = { editBio = it },
-                            label = { Text("Tiểu sử (Bio)") },
-                            modifier = Modifier.fillMaxWidth().height(100.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            maxLines = 3
-                        )
+                        OutlinedTextField(value = editBio, onValueChange = { editBio = it }, label = { Text("Tiểu sử (Bio)") }, modifier = Modifier.fillMaxWidth().height(100.dp), shape = RoundedCornerShape(12.dp), maxLines = 3)
                     }
                 },
                 confirmButton = {
@@ -414,58 +382,24 @@ fun ProfileScreen(
                         onClick = {
                             isUpdating = true
                             viewModel.updateProfile(
-                                uid = viewModel.userId,
-                                email = userProfile?.email ?: fallbackEmail,
-                                name = editName,
-                                school = editSchool,
-                                bio = editBio,
-                                onSuccess = {
-                                    isUpdating = false
-                                    showEditProfileDialog = false
-                                    Toast.makeText(context, "Đã lưu thông tin!", Toast.LENGTH_SHORT).show()
-                                }
+                                uid = viewModel.userId, email = userProfile?.email ?: fallbackEmail, name = editName, school = editSchool, bio = editBio,
+                                onSuccess = { isUpdating = false; showEditProfileDialog = false; Toast.makeText(context, "Đã lưu thông tin!", Toast.LENGTH_SHORT).show() }
                             )
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4C9EEB))
                     ) {
-                        if (isUpdating) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White)
-                        } else {
-                            Text("Lưu", color = Color.White)
-                        }
+                        if (isUpdating) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White) else Text("Lưu", color = Color.White)
                     }
                 },
-                dismissButton = {
-                    TextButton(onClick = { showEditProfileDialog = false }) {
-                        Text("Hủy", color = Color.Gray)
-                    }
-                }
+                dismissButton = { TextButton(onClick = { showEditProfileDialog = false }) { Text("Hủy", color = Color.Gray) } }
             )
         }
 
-        // Dialog Xóa tài liệu
-        if (documentToDelete != null) {
-            AlertDialog(
-                onDismissRequest = { documentToDelete = null },
-                title = { Text("Xác nhận xóa", fontWeight = FontWeight.Bold) },
-                text = { Text("Bạn có chắc muốn xóa '${documentToDelete!!.title}'? Hành động này không thể hoàn tác.") },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            viewModel.deleteDocument(documentToDelete!!.id)
-                            documentToDelete = null
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-                    ) { Text("Xóa", color = Color.White) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { documentToDelete = null }) { Text("Hủy", color = Color.Gray) }
-                }
-            )
-        }
-
-        // Dialog Đổi mật khẩu
+        // ==========================================
+        // DIALOG: ĐỔI MẬT KHẨU BẢO MẬT (Re-Auth)
+        // ==========================================
         if (showChangePasswordDialog) {
+            var currentPassword by remember { mutableStateOf("") }
             var newPassword by remember { mutableStateOf("") }
             var isProcessing by remember { mutableStateOf(false) }
 
@@ -474,21 +408,39 @@ fun ProfileScreen(
                 containerColor = Color.White,
                 title = { Text("Đổi mật khẩu", fontWeight = FontWeight.Bold) },
                 text = {
-                    OutlinedTextField(
-                        value = newPassword,
-                        onValueChange = { newPassword = it },
-                        label = { Text("Mật khẩu mới (Tối thiểu 6 ký tự)") },
-                        singleLine = true,
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Column {
+                        Text("Vì lý do bảo mật, vui lòng nhập mật khẩu hiện tại.", fontSize = 13.sp, color = Color.Gray)
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        OutlinedTextField(
+                            value = currentPassword,
+                            onValueChange = { currentPassword = it },
+                            label = { Text("Mật khẩu hiện tại") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        OutlinedTextField(
+                            value = newPassword,
+                            onValueChange = { newPassword = it },
+                            label = { Text("Mật khẩu mới (Tối thiểu 6 ký tự)") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
                 },
                 confirmButton = {
                     Button(
                         onClick = {
                             isProcessing = true
                             viewModel.changePassword(
-                                newPassword = newPassword,
+                                currentPass = currentPassword,
+                                newPass = newPassword,
                                 onSuccess = {
                                     isProcessing = false
                                     showChangePasswordDialog = false
@@ -500,52 +452,28 @@ fun ProfileScreen(
                                 }
                             )
                         },
-                        enabled = newPassword.length >= 6 && !isProcessing,
+                        enabled = currentPassword.isNotEmpty() && newPassword.length >= 6 && !isProcessing,
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4C9EEB))
                     ) {
-                        if (isProcessing) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White)
-                        } else {
-                            Text("Xác nhận", color = Color.White)
-                        }
+                        if (isProcessing) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White) else Text("Xác nhận", color = Color.White)
                     }
                 },
-                dismissButton = {
-                    TextButton(onClick = { showChangePasswordDialog = false }) {
-                        Text("Hủy", color = Color.Gray)
-                    }
-                }
+                dismissButton = { TextButton(onClick = { showChangePasswordDialog = false }) { Text("Hủy", color = Color.Gray) } }
             )
         }
     }
 }
 
 // ==========================================
-// COMPONENT CON: Hàng Menu trong Bottom Sheet
+// COMPONENT CON
 // ==========================================
 @Composable
-fun SettingsMenuItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    subtitle: String,
-    iconTint: Color,
-    titleColor: Color = Color.Black,
-    onClick: () -> Unit
-) {
+fun SettingsMenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, iconTint: Color, titleColor: Color = Color.Black, onClick: () -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .padding(vertical = 12.dp, horizontal = 8.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() }.padding(vertical = 12.dp, horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .background(iconTint.copy(alpha = 0.1f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
+        Box(modifier = Modifier.size(48.dp).background(iconTint.copy(alpha = 0.1f), CircleShape), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(24.dp))
         }
         Spacer(modifier = Modifier.width(16.dp))
@@ -554,66 +482,42 @@ fun SettingsMenuItem(
             Spacer(modifier = Modifier.height(2.dp))
             Text(text = subtitle, fontSize = 13.sp, color = Color.Gray)
         }
-        Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = Color.LightGray
-        )
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.LightGray)
     }
 }
 
 @Composable
-fun ProfileDocumentItem(
-    document: Document,
-    isOwner: Boolean,
-    onClick: () -> Unit,
-    onDeleteClick: () -> Unit
-) {
+fun ProfileDocumentItem(document: Document, isOwner: Boolean, onClick: () -> Unit, onDeleteClick: () -> Unit) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(90.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 90.dp).clickable { onClick() },
+        shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(56.dp).background(Color(0xFFE3F2FD), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
                 Text(text = document.title.take(1).uppercase(), fontWeight = FontWeight.ExtraBold, color = Color(0xFF4C9EEB), fontSize = 22.sp)
             }
-
             Spacer(modifier = Modifier.width(12.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = document.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
                     val (statusText, statusColor) = when (document.status) {
-                        "verified" -> "✓ Đã kiểm duyệt" to Color(0xFF4CAF50)
-                        "failed" -> "⚠ Lỗi xử lý" to Color(0xFFF44336)
-                        else -> "● Đang xử lý..." to Color(0xFFFF9800)
+                        "verified" -> "✓ Đã duyệt" to Color(0xFF4CAF50)
+                        "failed" -> "⚠ Lỗi" to Color(0xFFF44336)
+                        else -> "● Đang xử lý" to Color(0xFFFF9800)
                     }
-
-                    Text(text = statusText, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(text = statusText, color = statusColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = document.size ?: "N/A", fontSize = 11.sp, color = Color.Gray)
+                    Text(text = document.size ?: "N/A", fontSize = 12.sp, color = Color.Gray)
                 }
-
-                Text(text = "Ngày đăng: ${document.uploadDate.take(10)}", fontSize = 10.sp, color = Color.LightGray)
+                Text(text = "Ngày đăng: ${document.uploadDate.take(10)}", fontSize = 12.sp, color = Color.LightGray)
             }
-
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 8.dp)) {
                 Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.Gray)
-                Text(text = "${document.downloads}", fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                Text(text = "${document.downloads}", fontSize = 12.sp, fontWeight = FontWeight.Medium)
             }
-
             if (isOwner) {
-                IconButton(onClick = onDeleteClick, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFFFCDD2), modifier = Modifier.size(20.dp))
+                IconButton(onClick = onDeleteClick) {
+                    Icon(Icons.Default.Delete, contentDescription = "Xóa", tint = Color(0xFFFFCDD2), modifier = Modifier.size(24.dp))
                 }
             } else {
                 Spacer(modifier = Modifier.width(12.dp))

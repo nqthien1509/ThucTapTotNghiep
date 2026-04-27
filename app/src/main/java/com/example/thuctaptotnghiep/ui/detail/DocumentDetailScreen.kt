@@ -2,6 +2,7 @@ package com.example.thuctaptotnghiep.ui.detail
 
 import android.app.DownloadManager
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Environment
 import android.widget.Toast
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
+import com.example.thuctaptotnghiep.utils.toFullUrl
 import com.rizzi.bouquet.ResourceType
 import com.rizzi.bouquet.VerticalPDFReader
 import com.rizzi.bouquet.rememberVerticalPdfReaderState
@@ -53,8 +55,6 @@ fun DocumentDetailScreen(
 ) {
     val context = LocalContext.current
 
-    // CẬP NHẬT: Đã xóa FirebaseAuth và currentUserId vì Hilt và Backend tự lo phần danh tính!
-
     val document by viewModel.document.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
@@ -62,11 +62,12 @@ fun DocumentDetailScreen(
     val isFavorite by viewModel.isFavorite.collectAsState()
     val isWatchLater by viewModel.isWatchLater.collectAsState()
 
+    val isTogglingAction by viewModel.isTogglingAction.collectAsState()
+
     var isPreviewOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(documentId) {
         if (documentId.isNotEmpty()) {
-            // CẬP NHẬT: Chỉ truyền documentId
             viewModel.fetchDocumentDetail(documentId)
         }
     }
@@ -82,7 +83,7 @@ fun DocumentDetailScreen(
     }
 
     if (isPreviewOpen && document != null) {
-        val fullUrl = "http://10.0.2.2:3000${document!!.fileUrl}"
+        val fullUrl = document!!.fileUrl.toFullUrl()
         val pdfState = rememberVerticalPdfReaderState(
             resource = ResourceType.Remote(fullUrl),
             isZoomEnable = true
@@ -107,7 +108,16 @@ fun DocumentDetailScreen(
         }
     } else {
         Scaffold(
-            bottomBar = { AppBottomNavigationBar(onHomeClick, onUploadClick, onProfileClick, onSearchClick) },
+            bottomBar = {
+                // ĐÃ FIX: Khai báo rõ tên tham số (Named Arguments)
+                AppBottomNavigationBar(
+                    currentRoute = null,
+                    onHomeClick = onHomeClick,
+                    onUploadClick = onUploadClick,
+                    onProfileClick = onProfileClick,
+                    onSearchClick = onSearchClick
+                )
+            },
             containerColor = Color(0xFFF5F5F5)
         ) { paddingValues ->
             Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
@@ -138,15 +148,30 @@ fun DocumentDetailScreen(
                                 Text(text = doc.title, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    // CẬP NHẬT: Chỉ truyền doc.id
-                                    IconButton(onClick = { viewModel.toggleWatchLater(doc.id) }) {
+                                    IconButton(
+                                        onClick = { viewModel.toggleWatchLater(doc.id) },
+                                        enabled = !isTogglingAction
+                                    ) {
                                         Icon(imageVector = if (isWatchLater) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, contentDescription = "Xem sau", tint = if (isWatchLater) Color(0xFF4C9EEB) else Color.Gray)
                                     }
-                                    // CẬP NHẬT: Chỉ truyền doc.id
-                                    IconButton(onClick = { viewModel.toggleFavorite(doc.id) }) {
+
+                                    IconButton(
+                                        onClick = { viewModel.toggleFavorite(doc.id) },
+                                        enabled = !isTogglingAction
+                                    ) {
                                         Icon(imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, contentDescription = "Yêu thích", tint = if (isFavorite) Color.Red else Color.Gray)
                                     }
-                                    IconButton(onClick = { /* TODO: Xử lý share link */ }) {
+
+                                    IconButton(onClick = {
+                                        val shareIntent = Intent().apply {
+                                            action = Intent.ACTION_SEND
+                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_SUBJECT, "Chia sẻ tài liệu: ${doc.title}")
+                                            putExtra(Intent.EXTRA_TEXT, "Đọc tài liệu '${doc.title}' trên StuShare: http://stushare.com/doc/${doc.id}")
+                                        }
+                                        val chooser = Intent.createChooser(shareIntent, "Chia sẻ tài liệu qua...")
+                                        context.startActivity(chooser)
+                                    }) {
                                         Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.Gray)
                                     }
                                 }
@@ -238,7 +263,10 @@ fun DocumentDetailScreen(
                                 }
 
                                 Button(
-                                    onClick = { downloadDocument(context, doc.fileUrl, doc.title) },
+                                    onClick = {
+                                        val safeFileName = viewModel.getSafeFileName(doc.title)
+                                        downloadDocument(context, doc.fileUrl, safeFileName)
+                                    },
                                     modifier = Modifier.weight(1f).height(56.dp),
                                     shape = RoundedCornerShape(16.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF286090))
@@ -267,14 +295,15 @@ fun InfoItem(label: String, value: String) {
     }
 }
 
-fun downloadDocument(context: Context, fileUrl: String, title: String) {
+fun downloadDocument(context: Context, fileUrl: String, safeFileName: String) {
     try {
-        val fullUrl = "http://10.0.2.2:3000$fileUrl"
+        val fullUrl = fileUrl.toFullUrl()
+
         val request = DownloadManager.Request(Uri.parse(fullUrl))
-            .setTitle(title)
+            .setTitle(safeFileName)
             .setDescription("Đang tải tài liệu từ ứng dụng...")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "$title.pdf")
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, safeFileName)
             .setAllowedOverMetered(true)
             .setAllowedOverRoaming(true)
 

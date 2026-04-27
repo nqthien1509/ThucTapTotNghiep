@@ -34,13 +34,15 @@ class DocumentDetailViewModel @Inject constructor(
     private val _isWatchLater = MutableStateFlow(false)
     val isWatchLater: StateFlow<Boolean> = _isWatchLater.asStateFlow()
 
-    // CẬP NHẬT: Đã xóa tham số userId vì Backend tự định danh qua Token
+    // CẢI TIẾN 1: Trạng thái khóa nút (Chống click liên tục / Spam click)
+    private val _isTogglingAction = MutableStateFlow(false)
+    val isTogglingAction: StateFlow<Boolean> = _isTogglingAction.asStateFlow()
+
     fun fetchDocumentDetail(id: String) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
             try {
-                // Chỉ cần truyền id
                 val result = repository.getDocumentById(id)
                 _document.value = result
 
@@ -55,39 +57,63 @@ class DocumentDetailViewModel @Inject constructor(
         }
     }
 
+    // CẢI TIẾN 2: Hàm làm sạch tên file để tải xuống (Sanitize Filename)
+    fun getSafeFileName(originalTitle: String, extension: String = ".pdf"): String {
+        // Regex tìm các ký tự không được phép đặt tên file trong hệ thống
+        val invalidChars = "[\\\\/:*?\"<>|]".toRegex()
+        val safeName = originalTitle.replace(invalidChars, "_").trim()
+
+        return if (safeName.isEmpty()) {
+            "document_${System.currentTimeMillis()}$extension"
+        } else {
+            "$safeName$extension"
+        }
+    }
+
     // =======================================================
-    // HÀM XỬ LÝ TƯƠNG TÁC (OPTIMISTIC UI)
+    // HÀM XỬ LÝ TƯƠNG TÁC (OPTIMISTIC UI + DEBOUNCE)
     // =======================================================
 
-    // CẬP NHẬT: Đã xóa tham số userId
     fun toggleFavorite(documentId: String) {
+        // Ngăn chặn gọi API liên tục nếu đang xử lý request trước đó
+        if (_isTogglingAction.value) return
+
         viewModelScope.launch {
+            _isTogglingAction.value = true
             val currentState = _isFavorite.value
             _isFavorite.value = !currentState // Cập nhật UI ngay lập tức
 
             try {
-                // Không cần tạo Map body nữa, gọi thẳng repository
                 repository.toggleFavorite(documentId)
             } catch (e: Exception) {
                 // Nếu gọi API thất bại, đảo ngược UI về như cũ
                 _isFavorite.value = currentState
                 _errorMessage.value = "Lỗi khi cập nhật yêu thích: ${e.message}"
+            } finally {
+                // Mở khóa nút khi hoàn tất luồng
+                _isTogglingAction.value = false
             }
         }
     }
 
-    // CẬP NHẬT: Đã xóa tham số userId
     fun toggleWatchLater(documentId: String) {
+        // Ngăn chặn gọi API liên tục nếu đang xử lý request trước đó
+        if (_isTogglingAction.value) return
+
         viewModelScope.launch {
+            _isTogglingAction.value = true
             val currentState = _isWatchLater.value
             _isWatchLater.value = !currentState // Cập nhật UI ngay lập tức
 
             try {
-                // Không cần tạo Map body nữa
                 repository.toggleWatchLater(documentId)
             } catch (e: Exception) {
+                // Nếu gọi API thất bại, đảo ngược UI về như cũ
                 _isWatchLater.value = currentState
                 _errorMessage.value = "Lỗi khi cập nhật xem sau: ${e.message}"
+            } finally {
+                // Mở khóa nút khi hoàn tất luồng
+                _isTogglingAction.value = false
             }
         }
     }
