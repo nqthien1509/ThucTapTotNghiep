@@ -16,6 +16,7 @@ firebase-key.json
 
 # Thư mục chứa file PDF upload tạm thời
 uploads/
+<<<<<<< HEAD
 # Bỏ qua các thư mục build và cache của Gradle (rất nặng)
 .gradle/
 */build/
@@ -34,3 +35,8 @@ build/
 keystore.properties
 # Bỏ qua file hệ điều hành sinh ra (như máy Mac)
 .DS_Store
+=======
+
+.gradle/
+build/
+>>>>>>> Backend

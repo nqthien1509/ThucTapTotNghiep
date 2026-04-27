@@ -1,124 +1,118 @@
-const docRepo = require('../repositories/document.repository');
+﻿﻿const docRepo = require('../repositories/document.repository');
 const docService = require('../services/document.service');
 const { sendToQueue } = require('../services/rabbitmq.service');
 const { validationResult } = require('express-validator');
 const fs = require('fs');
 
 class DocumentController {
-    // ==========================================
-    // 1. UPLOAD TÀI LIỆU (Chặn file rỗng 0MB)
-    // ==========================================
     async upload(req, res, next) {
+        let createdDoc = null;
+
         try {
-            // Bước 1: Kiểm tra lỗi validation từ express-validator (title, subject...)
             const errors = validationResult(req);
             if (!errors.isEmpty()) {
-                // Nếu lỗi text, xóa ngay file vừa upload lên để tránh rác
                 if (req.file && fs.existsSync(req.file.path)) {
                     fs.unlinkSync(req.file.path);
                 }
                 return res.status(400).json({ message: errors.array()[0].msg });
             }
 
-            // Bước 2: Kiểm tra sự tồn tại của file & Lỗi 0 bytes từ máy ảo Android
             if (!req.file || req.file.size === 0) {
-                // Dọn dẹp cái vỏ file rỗng nếu Multer lỡ tạo ra
                 if (req.file && fs.existsSync(req.file.path)) {
                     fs.unlinkSync(req.file.path);
                 }
-                return res.status(400).json({ 
-                    message: 'File không hợp lệ hoặc bị rỗng (0 bytes). Nếu up từ Google Drive, vui lòng tải hẳn xuống máy trước!' 
+                return res.status(400).json({
+                    message: 'File khong hop le hoac bi rong (0 bytes).'
                 });
             }
 
-            // Bước 3: Chuẩn bị dữ liệu
             const { title, authorName, subject, category, description, tags } = req.body;
-            const tagsArray = tags ? tags.split(',').map(t => t.trim()).filter(t => t !== "") : [];
-            
-            // Ghi log debug thay vì console.log để hệ thống giám sát dễ đọc
-            req.log.debug({ fileName: req.file.originalname, bytes: req.file.size }, "Bắt đầu xử lý tính toán dung lượng");
-            
-            // Tính toán dung lượng thật từ file đã nhận
+            const tagsArray = tags ? tags.split(',').map((t) => t.trim()).filter((t) => t !== '') : [];
+
+            req.log.debug({ fileName: req.file.originalname, bytes: req.file.size }, 'Bat dau xu ly tinh toan dung luong');
+
             const sizeInMB = (req.file.size / (1024 * 1024)).toFixed(2) + ' MB';
-            
-            // Bước 4: Lưu vào Database
-            const newDoc = await docRepo.create({
-                userId: req.user.uid, // Lấy từ Token bảo mật
-                title: title || 'Tài liệu không tên',
-                authorName: authorName || 'Người dùng Ẩn danh',
-                subject: subject || 'Khác',
+
+            createdDoc = await docRepo.create({
+                userId: req.user.uid,
+                title: title || 'Tai lieu khong ten',
+                authorName: authorName || 'Nguoi dung an danh',
+                subject: subject || 'Khac',
                 category: category || 'Slide',
                 description: description || '',
                 tags: tagsArray,
                 fileUrl: '/uploads/' + req.file.filename,
-                size: sizeInMB, // Lưu dung lượng thực tế
+                size: sizeInMB,
                 status: 'pending'
             });
 
-            // Bước 5: Đẩy vào hàng đợi RabbitMQ để xử lý Thumbnail & Virus
-            sendToQueue({ 
-                documentId: newDoc._id, 
-                title: newDoc.title, 
-                filePath: req.file.path, 
-                action: 'CHECK_VIRUS_AND_THUMBNAIL', 
-                authorName: newDoc.authorName 
+            await sendToQueue({
+                documentId: createdDoc._id,
+                title: createdDoc.title,
+                filePath: req.file.path,
+                action: 'CHECK_VIRUS_AND_THUMBNAIL',
+                userId: req.user.uid
             }, req.id, req.log);
 
-            req.log.info({ documentId: newDoc._id, size: sizeInMB }, 'Upload tài liệu thành công');
-            
-            res.status(200).json({ 
-                message: 'Tài liệu đã được tải lên và đang chờ xử lý!', 
-                document: newDoc 
-            });
+            req.log.info({ documentId: createdDoc._id, size: sizeInMB }, 'Upload tai lieu thanh cong');
 
-        } catch (error) { 
-            // Nếu có lỗi bất ngờ, dọn dẹp file vật lý
+            res.status(200).json({
+                message: 'Tai lieu da duoc tai len va dang cho xu ly!',
+                document: createdDoc
+            });
+        } catch (error) {
             if (req.file && fs.existsSync(req.file.path)) {
                 fs.unlinkSync(req.file.path);
             }
-            next(error); 
+
+            if (createdDoc && createdDoc._id) {
+                try {
+                    await docRepo.deleteById(createdDoc._id);
+                } catch (rollbackError) {
+                    req.log.error({ err: rollbackError, documentId: createdDoc._id }, 'Rollback document that bai');
+                }
+            }
+
+            if (!error.status) {
+                error.status = 503;
+                error.message = 'Khong the day job vao hang doi. Vui long thu lai sau.';
+            }
+
+            next(error);
         }
     }
 
-    // ==========================================
-    // 2. TƯƠNG TÁC (YÊU THÍCH / XEM SAU)
-    // ==========================================
     async toggleFavorite(req, res, next) {
         try {
             const isAdded = await docService.toggleFavorite(req.params.id, req.user.uid);
-            res.status(200).json({ message: isAdded ? 'Đã thêm vào yêu thích' : 'Đã xóa khỏi yêu thích' });
+            res.status(200).json({ message: isAdded ? 'Da them vao yeu thich' : 'Da xoa khoi yeu thich' });
         } catch (error) { next(error); }
     }
 
     async toggleWatchLater(req, res, next) {
         try {
             const isAdded = await docService.toggleWatchLater(req.params.id, req.user.uid);
-            res.status(200).json({ message: isAdded ? 'Đã thêm vào danh sách xem sau' : 'Đã xóa khỏi danh sách xem sau' });
+            res.status(200).json({ message: isAdded ? 'Da them vao danh sach xem sau' : 'Da xoa khoi danh sach xem sau' });
         } catch (error) { next(error); }
     }
 
-    // ==========================================
-    // 3. TRUY XUẤT DỮ LIỆU
-    // ==========================================
     async getAll(req, res, next) {
-        try { 
+        try {
             const docs = await docRepo.findAll();
-            res.status(200).json(docs); 
+            res.status(200).json(docs);
         } catch (error) { next(error); }
     }
 
     async getDetail(req, res, next) {
         try {
             const doc = await docRepo.findById(req.params.id);
-            if (!doc) return res.status(404).json({ message: 'Không tìm thấy tài liệu!' });
+            if (!doc) return res.status(404).json({ message: 'Khong tim thay tai lieu!' });
 
             const docData = doc.toObject();
-            // Kiểm tra trạng thái của User hiện tại với tài liệu này
             docData.isFavorite = req.user ? doc.favoritedBy.includes(req.user.uid) : false;
             docData.isWatchLater = req.user ? doc.watchLaterBy.includes(req.user.uid) : false;
-            
-            // Bảo mật: Không trả về mảng ID của hàng nghìn người khác
-            delete docData.favoritedBy; 
+
+            delete docData.favoritedBy;
             delete docData.watchLaterBy;
 
             res.status(200).json(docData);
@@ -127,29 +121,27 @@ class DocumentController {
 
     async search(req, res, next) {
         try {
-            let query = {};
+            const query = {};
             if (req.query.q) query.title = { $regex: req.query.q, $options: 'i' };
-            if (req.query.category && req.query.category !== 'Tất cả') query.category = req.query.category;
-            
-            // Nếu không có từ khóa và không có category, trả về mảng rỗng thay vì lỗi
+            if (req.query.category && req.query.category !== 'Tat ca') query.category = req.query.category;
+
             if (Object.keys(query).length === 0) return res.status(200).json([]);
-            
+
             const results = await docRepo.findByQuery(query);
             res.status(200).json(results);
         } catch (error) { next(error); }
     }
 
     async getMyDocuments(req, res, next) {
-        try { 
-            // Tìm tài liệu dựa trên userId lấy từ Token
+        try {
             const docs = await docRepo.findByQuery({ userId: req.user.uid });
-            res.status(200).json(docs); 
+            res.status(200).json(docs);
         } catch (error) { next(error); }
     }
 
     async getFavorites(req, res, next) {
         try {
-            if (req.params.userId !== req.user.uid) return res.status(403).json({ message: "Forbidden" });
+            if (req.params.userId !== req.user.uid) return res.status(403).json({ message: 'Forbidden' });
             const docs = await docRepo.findByQuery({ favoritedBy: req.params.userId });
             res.status(200).json(docs);
         } catch (error) { next(error); }
@@ -157,23 +149,20 @@ class DocumentController {
 
     async getWatchLater(req, res, next) {
         try {
-            if (req.params.userId !== req.user.uid) return res.status(403).json({ message: "Forbidden" });
+            if (req.params.userId !== req.user.uid) return res.status(403).json({ message: 'Forbidden' });
             const docs = await docRepo.findByQuery({ watchLaterBy: req.params.userId });
             res.status(200).json(docs);
         } catch (error) { next(error); }
     }
 
-    // ==========================================
-    // 4. XÓA TÀI LIỆU (IDOR Prevention)
-    // ==========================================
     async delete(req, res, next) {
         try {
             await docService.deleteDocument(req.params.id, req.user.uid);
-            req.log.info({ docId: req.params.id }, 'Xóa tài liệu thành công');
-            res.status(200).json({ message: 'Xóa thành công!' });
+            req.log.info({ docId: req.params.id }, 'Xoa tai lieu thanh cong');
+            res.status(200).json({ message: 'Xoa thanh cong!' });
         } catch (error) {
-            if (error.message === 'FORBIDDEN') return res.status(403).json({ message: 'Bạn không có quyền xóa tài liệu này!' });
-            if (error.message === 'NOT_FOUND') return res.status(404).json({ message: 'Tài liệu không tồn tại!' });
+            if (error.message === 'FORBIDDEN') return res.status(403).json({ message: 'Ban khong co quyen xoa tai lieu nay!' });
+            if (error.message === 'NOT_FOUND') return res.status(404).json({ message: 'Tai lieu khong ton tai!' });
             next(error);
         }
     }
