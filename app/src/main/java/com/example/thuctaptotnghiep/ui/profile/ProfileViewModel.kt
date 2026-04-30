@@ -13,6 +13,7 @@ import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -78,7 +79,10 @@ class ProfileViewModel @Inject constructor(
     val userId = currentUser?.uid ?: "default_id"
 
     init {
-        loadAllProfileData()
+        // [CẬP NHẬT]: Phải gọi launch ở đây vì hàm loadAllProfileData đã chuyển thành suspend
+        viewModelScope.launch {
+            loadAllProfileData()
+        }
         fetchUserProfile(userId)
     }
 
@@ -86,36 +90,36 @@ class ProfileViewModel @Inject constructor(
     // 4. CÁC HÀM XỬ LÝ DỮ LIỆU
     // =======================================================
 
-    fun loadAllProfileData(forceRefresh: Boolean = false) {
+    // [CẬP NHẬT]: Đổi thành suspend và bọc trong coroutineScope để gọi được async bên trong
+    private suspend fun loadAllProfileData(forceRefresh: Boolean = false) = coroutineScope {
         // Áp dụng Cache: Nếu đã có data và không bắt buộc refresh thì bỏ qua
-        if (isDataLoaded && !forceRefresh) return
+        if (isDataLoaded && !forceRefresh) return@coroutineScope
 
-        viewModelScope.launch {
-            _isLoading.value = true
-            _errorMessage.value = null
-            try {
-                // Tận dụng async để gọi 3 API song song
-                val myDocsDeferred = async { repository.getMyDocuments() }
-                val favDocsDeferred = async { repository.getFavoriteDocuments(userId) }
-                val watchDocsDeferred = async { repository.getWatchLaterDocuments(userId) }
+        _isLoading.value = true
+        _errorMessage.value = null
+        try {
+            // Tận dụng async để gọi 3 API song song
+            val myDocsDeferred = async { repository.getMyDocuments() }
+            val favDocsDeferred = async { repository.getFavoriteDocuments(userId) }
+            val watchDocsDeferred = async { repository.getWatchLaterDocuments(userId) }
 
-                _myDocuments.value = myDocsDeferred.await()
-                _favoriteDocuments.value = favDocsDeferred.await()
-                _watchLaterDocuments.value = watchDocsDeferred.await()
+            _myDocuments.value = myDocsDeferred.await()
+            _favoriteDocuments.value = favDocsDeferred.await()
+            _watchLaterDocuments.value = watchDocsDeferred.await()
 
-                isDataLoaded = true // Đánh dấu đã load xong cache
-            } catch (e: Exception) {
-                _errorMessage.value = e.message
-            } finally {
-                _isLoading.value = false
-            }
+            isDataLoaded = true // Đánh dấu đã load xong cache
+        } catch (e: Exception) {
+            _errorMessage.value = e.message
+        } finally {
+            _isLoading.value = false
         }
     }
 
     fun refreshDocuments() {
         viewModelScope.launch {
             _isRefreshing.value = true
-            loadAllProfileData(forceRefresh = true) // Ép tải lại
+            // [CẬP NHẬT]: Await chờ loadAllProfileData thực thi xong hoàn toàn
+            loadAllProfileData(forceRefresh = true)
             _isRefreshing.value = false
         }
     }

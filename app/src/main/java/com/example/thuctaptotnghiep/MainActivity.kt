@@ -57,11 +57,14 @@ class MainActivity : ComponentActivity() {
     // =======================================================
     private fun subscribeToFirebaseTopic() {
         val currentUser = FirebaseAuth.getInstance().currentUser
-        val rawName = currentUser?.displayName
 
-        if (!rawName.isNullOrBlank()) {
-            // Xóa khoảng trắng để tạo tên kênh khớp với Backend (VD: "Thien" -> "user_Thien")
-            val topicName = "user_${rawName.replace("\\s+".toRegex(), "")}"
+        // Cập nhật: Lấy uid thay vì displayName để đảm bảo tính duy nhất
+        val uid = currentUser?.uid
+
+        if (!uid.isNullOrBlank()) {
+            // Cập nhật: Đồng bộ regex với backend: replace(/[^a-zA-Z0-9_\-]/g, '_')
+            val sanitizedUid = uid.replace("[^a-zA-Z0-9_\\-]".toRegex(), "_")
+            val topicName = "user_$sanitizedUid"
 
             FirebaseMessaging.getInstance().subscribeToTopic(topicName)
                 .addOnCompleteListener { task ->
@@ -71,6 +74,9 @@ class MainActivity : ComponentActivity() {
                         Log.e("FCM", "❌ Đăng ký kênh thất bại", task.exception)
                     }
                 }
+        } else {
+            // Log cảnh báo nếu user chưa đăng nhập hoặc không lấy được uid
+            Log.w("FCM", "⚠️ Chưa đăng nhập hoặc không tìm thấy uid")
         }
     }
 

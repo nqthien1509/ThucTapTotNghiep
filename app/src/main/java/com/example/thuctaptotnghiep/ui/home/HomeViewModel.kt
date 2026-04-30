@@ -78,16 +78,14 @@ class HomeViewModel @Inject constructor(
     private fun distributeDocuments(allDocs: List<Document>) {
         if (allDocs.isEmpty()) return
 
-        // MỤC 1: Tài liệu mới nhất (Giả sử lấy 5 bài cuối cùng hoặc sort theo ngày)
-        // Nếu Model Document có trường ngày (vd: createdAt), bạn dùng:
-        // _latestDocs.value = allDocs.sortedByDescending { it.createdAt }.take(5)
-        _latestDocs.value = allDocs.reversed().take(5)
+        // [CẬP NHẬT] MỤC 1: Tài liệu mới nhất
+        // Backend đã sort mới nhất rồi nên không dùng .reversed() nữa, chỉ cần lấy trực tiếp 5 bài đầu
+        _latestDocs.value = allDocs.take(5)
 
-        // MỤC 2: Tài liệu phổ biến (Giả sử sort theo lượt xem)
-        // Nếu Model Document có trường views, bạn dùng:
-        // _popularDocs.value = allDocs.sortedByDescending { it.views }.take(5)
-        // Tạm thời mình dùng shuffled() ở đây để tránh lỗi compile, bạn nhớ đổi lại nhé!
-        _popularDocs.value = allDocs.shuffled().take(5)
+        // [CẬP NHẬT] MỤC 2: Tài liệu phổ biến
+        // Sắp xếp giảm dần theo lượt tải (downloads).
+        // Lưu ý: Có thể đổi thành it.views nếu bạn muốn tính theo lượt xem.
+        _popularDocs.value = allDocs.sortedByDescending { it.downloads }.take(5)
 
         // MỤC 3: Dành riêng cho bạn (Gợi ý ngẫu nhiên nhưng KHÔNG trùng với 2 mục trên)
         val excludeIds = (_latestDocs.value + _popularDocs.value).map { it.id }.toSet()
