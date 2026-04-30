@@ -16,6 +16,9 @@ const userRoutes = require('./routes/user.routes');
 const documentRoutes = require('./routes/document.routes');
 const Document = require('./models/Document');
 
+// [CẬP NHẬT]: Import các hàm quản lý RabbitMQ dùng chung
+const { connectRabbitMQ, closeConnection } = require('./services/rabbitmq.service');
+
 const logger = pino({ level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' });
 const loggerMiddleware = pinoHttp({
     logger,
@@ -91,6 +94,7 @@ app.get('/ready', async (req, res) => {
     let isRabbit = false;
 
     try {
+        // Vẫn giữ amqp.connect ở đây vì route này chủ yếu dùng để check health riêng biệt cho Docker/K8s
         const conn = await amqp.connect(process.env.RABBITMQ_URL);
         isRabbit = true;
         await conn.close();
@@ -103,12 +107,10 @@ app.use('/api/user', userRoutes);
 app.use('/api', documentRoutes);
 
 app.use((err, req, res, next) => {
-    // [CẬP NHẬT]: Bắt lỗi từ bộ lọc Multer (Sai định dạng)
     if (err.message && err.message.startsWith('INVALID_FILE_TYPE')) {
         return res.status(400).json({ message: err.message.split(': ')[1] });
     }
     
-    // [CẬP NHẬT]: Bắt lỗi file quá lớn của Multer (Vượt dung lượng)
     if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({ message: 'Dung lượng file vượt quá giới hạn cho phép.' });
     }
@@ -123,6 +125,18 @@ app.use((err, req, res, next) => {
     });
 });
 
-app.listen(process.env.PORT || 3000, () => {
+// [CẬP NHẬT]: Khởi tạo RabbitMQ ngay sau khi server lắng nghe port
+const server = app.listen(process.env.PORT || 3000, async () => {
     logger.info(`Server dang chay tai http://localhost:${process.env.PORT || 3000}`);
+    
+    // Mồi kết nối (Singleton)
+    await connectRabbitMQ(logger);
+});
+
+// [CẬP NHẬT]: Bắt sự kiện tắt server (Ctrl + C) để dọn dẹp kết nối
+process.on('SIGINT', async () => {
+    logger.info('Đang tắt server...');
+    await closeConnection(logger);
+    await mongoose.connection.close();
+    process.exit(0);
 });

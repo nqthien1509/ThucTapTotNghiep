@@ -5,8 +5,13 @@ const verifyToken = async (req, res, next) => {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ message: 'Unauthorized: Thiếu hoặc sai định dạng token!' });
     }
+    
     try {
-        const decodedToken = await admin.auth().verifyIdToken(authHeader.split(' ')[1]);
+        // Tách token từ chuỗi "Bearer <token>"
+        const token = authHeader.split(' ')[1];
+        const decodedToken = await admin.auth().verifyIdToken(token);
+        
+        // Gắn thông tin user vào request để các controller sử dụng
         req.user = decodedToken; 
         next();
     } catch (error) {
@@ -19,8 +24,11 @@ const optionalVerifyToken = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
         try {
-            req.user = await admin.auth().verifyIdToken(authHeader.split(' ')[1]);
-        } catch (error) { req.log.debug('Token không hợp lệ, truy cập ẩn danh.'); }
+            const token = authHeader.split(' ')[1];
+            req.user = await admin.auth().verifyIdToken(token);
+        } catch (error) { 
+            req.log.debug('Token không hợp lệ, truy cập ẩn danh.'); 
+        }
     }
     next(); 
 };

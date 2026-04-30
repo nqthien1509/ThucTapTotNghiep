@@ -49,8 +49,10 @@ const uploadImage = multer({
     limits: { fileSize: 5 * 1024 * 1024 } 
 });
 
-// 4. EXPORT CÁC MIDDLEWARE
+// 4. EXPORT CÁC MIDDLEWARE VÀ FILTER
 module.exports = {
     uploadPdf,
-    uploadImage
+    uploadImage,
+    pdfFilter,  // Export hàm này để phục vụ Unit Test
+    imageFilter // Export thêm hàm này dự phòng cho Unit Test ảnh sau này
 };

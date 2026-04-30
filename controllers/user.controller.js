@@ -6,6 +6,15 @@ class UserController {
     async getProfile(req, res, next) {
         try {
             const uid = req.params.uid;
+
+            // [CẬP NHẬT BẢO MẬT]: Ngăn chặn IDOR, chỉ cho phép user xem profile của chính mình
+            if (uid !== req.user.uid) {
+                req.log.warn({ uidParam: uid, tokenUid: req.user.uid }, 'Cảnh báo: Thử nghiệm xem chéo profile bị chặn');
+                return res.status(403).json({ 
+                    message: 'Forbidden: Bạn không có quyền xem thông tin của người dùng khác!' 
+                });
+            }
+
             const user = await userService.getUserProfile(uid);
             
             res.status(200).json(user);

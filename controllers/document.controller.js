@@ -46,6 +46,7 @@ class DocumentController {
                 status: 'pending'
             });
 
+            // [CẬP NHẬT]: Hàm này giờ đây sẽ dùng chung Connection & Channel siêu tốc
             await sendToQueue({
                 documentId: createdDoc._id,
                 title: createdDoc.title,
@@ -98,7 +99,6 @@ class DocumentController {
 
     async getAll(req, res, next) {
         try {
-            // [CẬP NHẬT]: Chỉ lấy các tài liệu đã được verified
             const docs = await docRepo.findByQuery({ status: 'verified' });
             res.status(200).json(docs);
         } catch (error) { next(error); }
@@ -109,7 +109,6 @@ class DocumentController {
             const doc = await docRepo.findById(req.params.id);
             if (!doc) return res.status(404).json({ message: 'Khong tim thay tai lieu!' });
 
-            // [CẬP NHẬT]: Chặn xem chi tiết nếu tài liệu chưa duyệt (trừ chủ sở hữu)
             if (doc.status !== 'verified') {
                 if (!req.user || req.user.uid !== doc.userId) {
                     return res.status(403).json({ message: 'Tài liệu đang chờ kiểm duyệt và bạn không có quyền xem.' });
@@ -133,10 +132,8 @@ class DocumentController {
             if (req.query.q) query.title = { $regex: req.query.q, $options: 'i' };
             if (req.query.category && req.query.category !== 'Tat ca') query.category = req.query.category;
 
-            // [CẬP NHẬT]: Chỉ tìm kiếm trong các tài liệu đã duyệt
             query.status = 'verified';
 
-            // Đổi điều kiện length === 1 vì luôn có ít nhất key 'status'
             if (Object.keys(query).length === 1) return res.status(200).json([]);
 
             const results = await docRepo.findByQuery(query);
@@ -154,7 +151,6 @@ class DocumentController {
     async getFavorites(req, res, next) {
         try {
             if (req.params.userId !== req.user.uid) return res.status(403).json({ message: 'Forbidden' });
-            // Nên cân nhắc thêm logic lọc verified ở đây nếu muốn user không thấy file favorite bị đánh failed sau này
             const docs = await docRepo.findByQuery({ favoritedBy: req.params.userId, status: 'verified' });
             res.status(200).json(docs);
         } catch (error) { next(error); }
