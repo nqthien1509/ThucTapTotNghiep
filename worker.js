@@ -5,6 +5,8 @@ const mongoose = require('mongoose');
 const Document = require('./models/Document');
 const admin = require('firebase-admin');
 const { QUEUE_NAME } = require('./services/rabbitmq.service');
+// [CẬP NHẬT]: Import service gửi thông báo
+const { sendNotificationToUser } = require('./services/notification.service');
 
 const pino = require('pino');
 const logger = pino({
@@ -58,10 +60,8 @@ async function processMessage(data) {
     logger.info({ requestId, documentId }, `[v] Nhan Job xu ly tai lieu: ${title}`);
     logger.debug({ requestId, documentId }, '--- Dang gia lap quet Virus va phan tich PDF ---');
 
-    // Giả lập xử lý mất thời gian
     await new Promise((resolve) => setTimeout(resolve, 7000));
 
-    // [CẢI TIẾN 1]: Sửa returnDocument thành new: true (Chuẩn Mongoose)
     const updatedDoc = await Document.findByIdAndUpdate(
         documentId,
         { status: 'verified' },
@@ -79,29 +79,17 @@ async function processMessage(data) {
         return;
     }
 
-    // [CẢI TIẾN 2]: Trim khoảng trắng thừa để an toàn tuyệt đối
-    const sanitizedUid = String(userId).trim().replace(/[^a-zA-Z0-9_\-]/g, '_');
-    const topicName = `user_${sanitizedUid}`;
-    
-    const message = {
-        notification: {
-            title: 'Kiem duyet hoan tat!',
-            body: `Tai lieu "${title}" cua ban da an toan va san sang de chia se.`
-        },
-        data: {
-            documentId: String(documentId),
-            action: 'OPEN_DOCUMENT_DETAIL'
-        },
-        topic: topicName
-    };
-
-    // [CẢI TIẾN 3]: Bọc try-catch để lỗi FCM không làm hỏng toàn bộ Job duyệt tài liệu
-    try {
-        await admin.messaging().send(message);
-        logger.info({ requestId, documentId, topicName }, 'Da gui thong bao thanh cong');
-    } catch (fcmError) {
-        logger.error({ requestId, documentId, topicName, err: fcmError.message }, 'Loi gui Push Notification (Tai lieu van xac thuc thanh cong)');
-    }
+    // [CẬP NHẬT]: Dùng service chuẩn hóa để gửi thông báo Duyệt thành công
+    await sendNotificationToUser(
+        userId,
+        'Tài liệu đã sẵn sàng! ✅',
+        `Tài liệu "${title}" của bạn đã được kiểm duyệt an toàn và hiển thị công khai.`,
+        { 
+            action: 'OPEN_DOCUMENT_DETAIL', 
+            documentId: String(documentId), 
+            type: 'UPLOAD_SUCCESS' 
+        }
+    );
 }
 
 async function startWorker() {

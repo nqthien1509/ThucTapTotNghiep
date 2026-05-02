@@ -1,6 +1,7 @@
 ﻿﻿const docRepo = require('../repositories/document.repository');
 const docService = require('../services/document.service');
 const { sendToQueue } = require('../services/rabbitmq.service');
+const { notifyDocumentFavorited } = require('../services/notification.service');
 const { validationResult } = require('express-validator');
 const fs = require('fs');
 
@@ -85,7 +86,23 @@ class DocumentController {
 
     async toggleFavorite(req, res, next) {
         try {
-            const isAdded = await docService.toggleFavorite(req.params.id, req.user.uid);
+            const result = await docService.toggleFavorite(req.params.id, req.user.uid);
+            const isAdded = result.isAdded;
+
+            if (isAdded) {
+                try {
+                    await notifyDocumentFavorited({
+                        ownerUid: result.document.userId,
+                        likerUid: req.user.uid,
+                        documentId: result.document._id,
+                        documentTitle: result.document.title,
+                        logger: req.log
+                    });
+                } catch (notifyError) {
+                    req.log.error({ err: notifyError, documentId: req.params.id }, 'Gui thong bao like that bai');
+                }
+            }
+
             res.status(200).json({ message: isAdded ? 'Da them vao yeu thich' : 'Da xoa khoi yeu thich' });
         } catch (error) { next(error); }
     }

@@ -16,7 +16,8 @@ router.get('/:uid', verifyToken, userController.getProfile);
 router.put('/:uid', verifyToken, userController.updateProfile);
 
 // 3. Cập nhật ảnh đại diện (Avatar)
-// Quy trình: Xác thực Token -> Lọc và lưu file ảnh -> Xử lý lưu đường dẫn vào DB
-router.post('/:uid/avatar', verifyToken, uploadImage, userController.updateAvatar);
+// [CẬP NHẬT]: Phải gọi .single('avatar') để Multer trả về một hàm middleware hợp lệ.
+// 'avatar' chính là tên cái field (key) mà Frontend/Mobile sẽ gửi kèm file lên.
+router.post('/:uid/avatar', verifyToken, uploadImage.single('avatar'), userController.updateAvatar);
 
 module.exports = router;

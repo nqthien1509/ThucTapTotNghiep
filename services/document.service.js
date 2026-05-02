@@ -8,7 +8,10 @@ class DocumentService {
         if (!doc) throw new Error('NOT_FOUND');
         const isFavorited = doc.favoritedBy.includes(userId);
         await docRepo.updateOne({ _id: docId }, isFavorited ? { $pull: { favoritedBy: userId } } : { $push: { favoritedBy: userId } });
-        return !isFavorited;
+        return {
+            isAdded: !isFavorited,
+            document: doc
+        };
     }
 
     async toggleWatchLater(docId, userId) {
