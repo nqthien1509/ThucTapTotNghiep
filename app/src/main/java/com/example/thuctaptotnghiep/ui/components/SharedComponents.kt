@@ -1,6 +1,5 @@
 package com.example.thuctaptotnghiep.ui.components
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -11,7 +10,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -41,14 +39,13 @@ fun UploadButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 // ==========================================
 @Composable
 fun AppBottomNavigationBar(
-    currentRoute: String? = null, // CẢI TIẾN 1: Nhận diện màn hình hiện tại (mặc định null để không báo lỗi code cũ)
+    currentRoute: String? = null,
     onHomeClick: () -> Unit,
     onUploadClick: () -> Unit,
     onProfileClick: () -> Unit,
-    onSearchClick: () -> Unit
+    onSearchClick: () -> Unit,
+    onNotificationClick: () -> Unit = {} // [CẬP NHẬT 1]: Thêm callback với giá trị mặc định là rỗng
 ) {
-    val context = LocalContext.current // Dùng để hiển thị Toast
-
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = Alignment.BottomCenter
@@ -61,18 +58,18 @@ fun AppBottomNavigationBar(
         ) {
             NavigationBarItem(
                 icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                selected = currentRoute == "home", // Làm sáng nếu đang ở Home
+                selected = currentRoute == "home",
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Color(0xFF4C9EEB),
                     unselectedIconColor = Color.Gray,
-                    indicatorColor = Color(0xFFE3F2FD) // Màu nền nhạt phía sau icon khi được chọn
+                    indicatorColor = Color(0xFFE3F2FD)
                 ),
-                onClick = { if (currentRoute != "home") onHomeClick() } // Tránh load lại trang nếu đang ở chính nó
+                onClick = { if (currentRoute != "home") onHomeClick() }
             )
 
             NavigationBarItem(
                 icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-                selected = currentRoute == "search", // Làm sáng nếu đang ở Search
+                selected = currentRoute == "search",
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Color(0xFF4C9EEB),
                     unselectedIconColor = Color.Gray,
@@ -92,14 +89,16 @@ fun AppBottomNavigationBar(
                     indicatorColor = Color(0xFFE3F2FD)
                 ),
                 onClick = {
-                    // CẢI TIẾN 2: Hiển thị Toast thay vì nút "chết"
-                    Toast.makeText(context, "Tính năng thông báo đang được phát triển!", Toast.LENGTH_SHORT).show()
+                    // [CẬP NHẬT 2]: Xóa dòng Toast cũ đi và gọi callback chuyển trang
+                    if (currentRoute != "notifications") {
+                        onNotificationClick()
+                    }
                 }
             )
 
             NavigationBarItem(
                 icon = { Icon(Icons.Default.Person, contentDescription = "Profile") },
-                selected = currentRoute == "profile", // Làm sáng nếu đang ở Profile
+                selected = currentRoute == "profile",
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Color(0xFF4C9EEB),
                     unselectedIconColor = Color.Gray,
@@ -124,7 +123,6 @@ fun LoadingStateView(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            // Bổ sung semantics để TalkBack đọc khi đang tải
             .semantics { contentDescription = "Đang tải dữ liệu, vui lòng đợi" },
         contentAlignment = Alignment.Center
     ) {
@@ -145,11 +143,10 @@ fun EmptyStateView(
         modifier = modifier
             .fillMaxSize()
             .padding(32.dp)
-            .semantics(mergeDescendants = true) { }, // Gộp để đọc mạch lạc
+            .semantics(mergeDescendants = true) { },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Icon trang trí, size lớn hơn để đỡ trống trải
         Icon(
             imageVector = icon,
             contentDescription = null,

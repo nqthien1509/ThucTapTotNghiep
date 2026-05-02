@@ -1,10 +1,12 @@
 package com.example.thuctaptotnghiep.data.network
 
+import com.example.thuctaptotnghiep.data.model.AppNotification // <-- Import model thông báo
 import com.example.thuctaptotnghiep.data.model.Document
-import com.example.thuctaptotnghiep.data.model.UploadResponse // <-- Import thêm UploadResponse
+import com.example.thuctaptotnghiep.data.model.UploadResponse
 import com.example.thuctaptotnghiep.data.model.User
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -21,7 +23,6 @@ interface ApiService {
     // 1. TÀI LIỆU (DOCUMENTS)
     // ==========================================
 
-    // CẢI TIẾN QUAN TRỌNG: Đổi thành UploadResponse để khớp với định dạng JSON { message, document }
     @Multipart
     @POST("api/upload")
     suspend fun uploadDocument(
@@ -48,7 +49,6 @@ interface ApiService {
         @Query("category") category: String? = null
     ): List<Document>
 
-    // CẢI TIẾN: Trả về Unit vì chỉ cần biết xóa thành công hay không
     @DELETE("api/documents/{id}")
     suspend fun deleteDocument(@Path("id") id: String): Unit
 
@@ -94,4 +94,16 @@ interface ApiService {
         @Path("uid") uid: String,
         @Part avatar: MultipartBody.Part
     ): User
+
+    // =======================================================
+    // 5. THÔNG BÁO (NOTIFICATIONS)
+    // =======================================================
+
+    // Lấy danh sách thông báo của user
+    @GET("api/notifications")
+    suspend fun getNotifications(): List<AppNotification>
+
+    // Đánh dấu tất cả thông báo là đã đọc
+    @PUT("api/notifications/read-all")
+    suspend fun markAllAsRead(): Response<Unit>
 }

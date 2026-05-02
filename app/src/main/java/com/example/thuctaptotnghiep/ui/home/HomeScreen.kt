@@ -36,7 +36,6 @@ import androidx.compose.ui.semantics.Role
 
 import com.example.thuctaptotnghiep.ui.components.EmptyStateView
 import com.example.thuctaptotnghiep.ui.components.LoadingStateView
-// CẢI TIẾN: Import hàm toFullUrl() đã tạo
 import com.example.thuctaptotnghiep.utils.toFullUrl
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,13 +45,12 @@ fun HomeScreen(
     onDocumentClick: (String) -> Unit,
     onProfileClick: () -> Unit,
     onSearchClick: () -> Unit,
-    // CẢI TIẾN: Thêm callback cho nút Xem tất cả
     onNavigateToSeeAll: (String) -> Unit,
+    onNotificationClick: () -> Unit, // Callback để mở màn hình thông báo
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
 
-    // CẢI TIẾN: Collect 3 danh sách đã phân loại từ ViewModel
     val latestDocs by viewModel.latestDocs.collectAsState()
     val popularDocs by viewModel.popularDocs.collectAsState()
     val recommendedDocs by viewModel.recommendedDocs.collectAsState()
@@ -72,10 +70,12 @@ fun HomeScreen(
     Scaffold(
         bottomBar = {
             AppBottomNavigationBar(
+                currentRoute = "home", // [CẬP NHẬT]: Báo cho thanh điều hướng biết đang ở màn Home
                 onHomeClick = { /* Đang ở Home */ },
                 onUploadClick = onNavigateToUpload,
                 onProfileClick = onProfileClick,
-                onSearchClick = onSearchClick
+                onSearchClick = onSearchClick,
+                onNotificationClick = onNotificationClick // [CẬP NHẬT]: Truyền sự kiện mở chuông thông báo
             )
         },
         containerColor = Color(0xFFF5F5F5)
@@ -94,7 +94,8 @@ fun HomeScreen(
                     HeaderSection(
                         userProfile = currentUserProfile,
                         fallbackName = viewModel.userName,
-                        onSearchClick = onSearchClick
+                        onSearchClick = onSearchClick,
+                        onNotificationClick = onNotificationClick // Truyền callback xuống Header
                     )
                 }
 
@@ -107,7 +108,6 @@ fun HomeScreen(
                         )
                     }
                 } else {
-                    // CẢI TIẾN: Truyền dữ liệu riêng cho từng section và gắn sự kiện Xem tất cả
                     item {
                         DocumentSection(
                             title = "Mới được tải lên",
@@ -142,7 +142,12 @@ fun HomeScreen(
 // ---------------------------------------------------------------------------
 
 @Composable
-fun HeaderSection(userProfile: User?, fallbackName: String, onSearchClick: () -> Unit) {
+fun HeaderSection(
+    userProfile: User?,
+    fallbackName: String,
+    onSearchClick: () -> Unit,
+    onNotificationClick: () -> Unit
+) {
     val displayUserName = userProfile?.displayName?.takeIf { it.isNotBlank() } ?: fallbackName
 
     Column(
@@ -152,7 +157,10 @@ fun HeaderSection(userProfile: User?, fallbackName: String, onSearchClick: () ->
             .statusBarsPadding()
             .padding(16.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(
                 modifier = Modifier
                     .size(50.dp)
@@ -161,7 +169,6 @@ fun HeaderSection(userProfile: User?, fallbackName: String, onSearchClick: () ->
                 contentAlignment = Alignment.Center
             ) {
                 if (!userProfile?.avatarUrl.isNullOrBlank()) {
-                    // CẢI TIẾN: Bỏ hard-code IP, dùng hàm extension toFullUrl()
                     val fullImageUrl = userProfile?.avatarUrl.toFullUrl()
                     AsyncImage(
                         model = fullImageUrl,
@@ -180,9 +187,18 @@ fun HeaderSection(userProfile: User?, fallbackName: String, onSearchClick: () ->
             }
 
             Spacer(modifier = Modifier.width(12.dp))
-            Column {
+
+            Column(modifier = Modifier.weight(1f)) {
                 Text("Xin chào,", color = Color.White, style = MaterialTheme.typography.bodyMedium)
                 Text(displayUserName, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+            }
+
+            IconButton(onClick = { onNotificationClick() }) {
+                Icon(
+                    imageVector = Icons.Default.Notifications,
+                    contentDescription = "Mở thông báo",
+                    tint = Color.White
+                )
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
@@ -216,7 +232,7 @@ fun DocumentSection(
     title: String,
     items: List<Document>,
     onItemClick: (String) -> Unit,
-    onSeeAllClick: () -> Unit // CẢI TIẾN: Thêm tham số callback
+    onSeeAllClick: () -> Unit
 ) {
     Column(modifier = Modifier.padding(top = 20.dp)) {
         Row(
@@ -236,7 +252,7 @@ fun DocumentSection(
                     .clickable(
                         onClickLabel = "Xem tất cả tài liệu mục $title",
                         role = Role.Button,
-                        onClick = onSeeAllClick // CẢI TIẾN: Gắn callback vào sự kiện click
+                        onClick = onSeeAllClick
                     )
                     .padding(horizontal = 8.dp, vertical = 12.dp)
             )
@@ -283,7 +299,6 @@ fun DocumentCardPreview(document: Document, onClick: () -> Unit) {
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
-            // Tương lai nếu Document có thumbnailUrl, bạn cũng có thể gắn AsyncImage và toFullUrl() vào đây thay vì Box màu tĩnh
             Box(
                 modifier = Modifier
                     .fillMaxWidth()

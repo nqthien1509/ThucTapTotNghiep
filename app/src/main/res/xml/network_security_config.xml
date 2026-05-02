@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+<network-security-config>
+    <!-- Cho phép HTTP cleartext CỤ THỂ cho các IP Test nội bộ -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- 10.0.2.2 là localhost của máy ảo Android -->
+        <domain includeSubdomains="true">10.0.2.2</domain>
 
-</PreferenceScreen>
+        <!-- Nếu bạn test trên điện thoại thật cắm cáp, thay IP LAN của bạn vào đây. VD: 192.168.1.x -->
+        <domain includeSubdomains="true">192.168.1.100</domain>
+    </domain-config>
+
+    <!-- Các domain khác MẶC ĐỊNH sẽ bị ép buộc dùng HTTPS an toàn -->
+</network-security-config>

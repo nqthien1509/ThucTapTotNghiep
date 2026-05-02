@@ -1,7 +1,8 @@
 package com.example.thuctaptotnghiep.ui
 
 import androidx.compose.runtime.Composable
-import androidx.navigation.NavGraph.Companion.findStartDestination // Bổ sung import để lấy node gốc
+import androidx.hilt.navigation.compose.hiltViewModel // [CẬP NHẬT]: Import hiltViewModel thay vì viewModel thường
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -14,6 +15,8 @@ import com.example.thuctaptotnghiep.ui.home.HomeScreen
 import com.example.thuctaptotnghiep.ui.profile.ProfileScreen
 import com.example.thuctaptotnghiep.ui.search.SearchScreen
 import com.example.thuctaptotnghiep.ui.upload.UploadScreen
+import com.example.thuctaptotnghiep.ui.notification.NotificationScreen
+import com.example.thuctaptotnghiep.ui.notification.NotificationViewModel
 import com.google.firebase.auth.FirebaseAuth
 
 @Composable
@@ -29,13 +32,11 @@ fun AppNavigation() {
     // =======================================================
     val navigateToBottomTab = { route: String ->
         navController.navigate(route) {
-            // CẢI TIẾN: Thay vì hard-code chuỗi "home", dùng findStartDestination().id
-            // Giúp dọn dẹp Back Stack an toàn tuyệt đối bất kể màn hình khởi đầu là gì.
             popUpTo(navController.graph.findStartDestination().id) {
-                saveState = true // Lưu lại trạng thái của tab bị đè
+                saveState = true
             }
-            launchSingleTop = true // Không mở thêm màn hình mới nếu đã đang ở đúng tab đó
-            restoreState = true    // Phục hồi lại trạng thái cũ khi quay lại (VD: Vị trí cuộn trang)
+            launchSingleTop = true
+            restoreState = true
         }
     }
 
@@ -76,9 +77,11 @@ fun AppNavigation() {
                 onDocumentClick = { id -> navController.navigate("document_detail/$id") },
                 onProfileClick = { navigateToBottomTab("profile") },
                 onSearchClick = { navigateToBottomTab("search") },
-                // Bắt sự kiện Xem tất cả và truyền category sang màn Search
                 onNavigateToSeeAll = { category ->
                     navController.navigate("search?category=$category")
+                },
+                onNotificationClick = {
+                    navController.navigate("notifications")
                 }
             )
         }
@@ -119,7 +122,6 @@ fun AppNavigation() {
                 onLogoutClick = {
                     FirebaseAuth.getInstance().signOut()
                     navController.navigate("login") {
-                        // Lệnh mạnh nhất để xóa sạch 100% Back Stack khi đăng xuất
                         popUpTo(navController.graph.id) { inclusive = true }
                     }
                 },
@@ -148,6 +150,19 @@ fun AppNavigation() {
                 onHomeClick = { navigateToBottomTab("home") },
                 onUploadClick = { navigateToBottomTab("upload") },
                 onProfileClick = { navigateToBottomTab("profile") }
+            )
+        }
+
+        // 8. Màn hình Thông báo (Notification Center)
+        composable("notifications") {
+            // [CẬP NHẬT]: Dùng hiltViewModel() để Hilt tự động tiêm ApiService vào ViewModel
+            val viewModel: NotificationViewModel = hiltViewModel()
+
+            NotificationScreen(
+                viewModel = viewModel,
+                onNavigateToDocument = { documentId ->
+                    navController.navigate("document_detail/$documentId")
+                }
             )
         }
     }
