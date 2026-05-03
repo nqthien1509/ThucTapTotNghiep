@@ -5,7 +5,6 @@ import com.google.gson.annotations.SerializedName
 data class Document(
     @SerializedName("_id") val id: String,
 
-    // CẬP NHẬT TRỌNG TÂM: Thêm userId để đồng bộ với Backend mới
     @SerializedName("userId") val userId: String? = null,
 
     @SerializedName("title") val title: String,
@@ -17,6 +16,10 @@ data class Document(
     @SerializedName("tags") val tags: List<String> = emptyList(),
 
     @SerializedName("fileUrl") val fileUrl: String,
+
+    // [CẬP NHẬT TRỌNG TÂM]: Thêm trường nhận URL ảnh xem trước
+    @SerializedName("thumbnailUrl") val thumbnailUrl: String? = null,
+
     @SerializedName("size") val size: String? = null,
     @SerializedName("uploadDate") val uploadDate: String,
 
@@ -24,16 +27,10 @@ data class Document(
     @SerializedName("downloads") val downloads: Int = 0,
     @SerializedName("views") val views: Int = 0,
 
-    // Các trạng thái tương tác trả về từ Backend
     @SerializedName("isFavorite") val isFavorite: Boolean = false,
     @SerializedName("isWatchLater") val isWatchLater: Boolean = false
 )
 
-// =======================================================
-// CẢI TIẾN QUAN TRỌNG: Wrapper class cho API Upload
-// =======================================================
-// Backend trả về JSON dạng: { "message": "...", "document": { ... } }
-// Class này giúp Retrofit hiểu và ép kiểu chính xác, tránh lỗi Parsing Error!
 data class UploadResponse(
     @SerializedName("message") val message: String,
     @SerializedName("document") val document: Document

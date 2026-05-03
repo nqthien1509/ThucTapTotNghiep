@@ -46,7 +46,7 @@ fun HomeScreen(
     onProfileClick: () -> Unit,
     onSearchClick: () -> Unit,
     onNavigateToSeeAll: (String) -> Unit,
-    onNotificationClick: () -> Unit, // Callback để mở màn hình thông báo
+    onNotificationClick: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -70,12 +70,12 @@ fun HomeScreen(
     Scaffold(
         bottomBar = {
             AppBottomNavigationBar(
-                currentRoute = "home", // [CẬP NHẬT]: Báo cho thanh điều hướng biết đang ở màn Home
-                onHomeClick = { /* Đang ở Home */ },
+                currentRoute = "home",
+                onHomeClick = {  },
                 onUploadClick = onNavigateToUpload,
                 onProfileClick = onProfileClick,
                 onSearchClick = onSearchClick,
-                onNotificationClick = onNotificationClick // [CẬP NHẬT]: Truyền sự kiện mở chuông thông báo
+                onNotificationClick = onNotificationClick
             )
         },
         containerColor = Color(0xFFF5F5F5)
@@ -95,7 +95,7 @@ fun HomeScreen(
                         userProfile = currentUserProfile,
                         fallbackName = viewModel.userName,
                         onSearchClick = onSearchClick,
-                        onNotificationClick = onNotificationClick // Truyền callback xuống Header
+                        onNotificationClick = onNotificationClick
                     )
                 }
 
@@ -173,7 +173,7 @@ fun HeaderSection(
                     AsyncImage(
                         model = fullImageUrl,
                         contentDescription = "Ảnh đại diện của $displayUserName",
-                        contentScale = ContentScale.Crop,
+                        contentScale = ContentScale.Crop, // Avatar thì giữ nguyên Crop cho tròn
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
@@ -306,12 +306,24 @@ fun DocumentCardPreview(document: Document, onClick: () -> Unit) {
                     .background(Color(0xFFE3F2FD)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = document.title.take(1).uppercase(),
-                    style = MaterialTheme.typography.displayMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF4C9EEB)
-                )
+                // [CẬP NHẬT TRỌNG TÂM]: Ưu tiên load ảnh bìa bằng Coil nếu có, nếu không thì hiện chữ
+                if (!document.thumbnailUrl.isNullOrEmpty()) {
+                    AsyncImage(
+                        model = document.thumbnailUrl.toFullUrl(),
+                        contentDescription = "Ảnh bìa của tài liệu ${document.title}",
+                        contentScale = ContentScale.Fit, // Đổi sang Fit để hiển thị trọn vẹn tờ PDF trong Card
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(4.dp) // Thêm chút lề để tách biệt ảnh khỏi viền hộp
+                    )
+                } else {
+                    Text(
+                        text = document.title.take(1).uppercase(),
+                        style = MaterialTheme.typography.displayMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF4C9EEB)
+                    )
+                }
             }
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(

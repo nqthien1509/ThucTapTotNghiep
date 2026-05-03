@@ -32,11 +32,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
 import com.example.thuctaptotnghiep.utils.toFullUrl
 import com.rizzi.bouquet.ResourceType
@@ -109,7 +111,6 @@ fun DocumentDetailScreen(
     } else {
         Scaffold(
             bottomBar = {
-                // ĐÃ FIX: Khai báo rõ tên tham số (Named Arguments)
                 AppBottomNavigationBar(
                     currentRoute = null,
                     onHomeClick = onHomeClick,
@@ -128,15 +129,44 @@ fun DocumentDetailScreen(
                     val doc = document!!
 
                     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+
+                        // [CẬP NHẬT TRỌNG TÂM]: Header chứa ảnh bìa tài liệu
                         Box(modifier = Modifier.fillMaxWidth().height(260.dp).background(Color(0xFFE3F2FD))) {
+
+                            // Load ảnh bìa nếu có
+                            if (!doc.thumbnailUrl.isNullOrEmpty()) {
+                                AsyncImage(
+                                    model = doc.thumbnailUrl.toFullUrl(),
+                                    contentDescription = "Ảnh bìa tài liệu",
+                                    contentScale = ContentScale.Fit, // Đổi sang Fit để hiện trọn vẹn tờ PDF
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(top = 40.dp, bottom = 20.dp) // Căn lề trên dưới để tờ giấy trông đẹp hơn
+                                )
+                                // Phủ một lớp màu đen mờ (10%) để làm dịu mắt và nổi bật nút Back
+                                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.1f)))
+                            } else {
+                                // Fallback nếu chưa có ảnh bìa
+                                Icon(
+                                    Icons.Default.PictureAsPdf,
+                                    contentDescription = "PDF Cover",
+                                    tint = Color(0xFF4C9EEB),
+                                    modifier = Modifier.size(100.dp).align(Alignment.Center)
+                                )
+                            }
+
+                            // Nút Back
                             Box(
-                                modifier = Modifier.padding(top = 40.dp, start = 20.dp).size(44.dp)
-                                    .background(Color.White.copy(alpha = 0.8f), CircleShape).clip(CircleShape).clickable { onBackClick() },
+                                modifier = Modifier
+                                    .padding(top = 40.dp, start = 20.dp)
+                                    .size(44.dp)
+                                    .background(Color.White.copy(alpha = 0.8f), CircleShape)
+                                    .clip(CircleShape)
+                                    .clickable { onBackClick() },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.Black)
                             }
-                            Icon(Icons.Default.PictureAsPdf, contentDescription = "PDF Cover", tint = Color(0xFF4C9EEB), modifier = Modifier.size(100.dp).align(Alignment.Center))
                         }
 
                         Column(

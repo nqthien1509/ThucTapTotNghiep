@@ -17,9 +17,16 @@ fun String?.toFullUrl(): String {
         return this
     }
 
-    // [CẬP NHẬT]: Đọc base URL từ BuildConfig (Tự động đổi theo Debug/Release)
+    // [CẬP NHẬT TRỌNG TÂM]: Xử lý triệt để lỗi dư dấu "/" khi nối chuỗi
+    // Lấy base URL từ cấu hình
     val baseUrl = BuildConfig.BASE_URL
-    val cleanPath = if (this.startsWith("/")) this.substring(1) else this
 
-    return "$baseUrl/$cleanPath"
+    // Xóa dấu "/" ở cuối Base URL (nếu có)
+    val cleanBaseUrl = baseUrl.removeSuffix("/")
+
+    // Xóa dấu "/" ở đầu Path (nếu có)
+    val cleanPath = this.removePrefix("/")
+
+    // Nối lại đảm bảo chỉ có đúng 1 dấu "/" ở giữa
+    return "$cleanBaseUrl/$cleanPath"
 }
