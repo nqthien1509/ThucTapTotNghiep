@@ -15,7 +15,12 @@ const documentSchema = new mongoose.Schema({
     }, 
     description: { type: String, trim: true }, 
     tags: { type: [String], default: [] }, 
+    
     fileUrl: { type: String, required: true },
+    
+    // [CẬP NHẬT TRỌNG TÂM]: Thêm trường lưu đường dẫn ảnh xem trước (trang 1 của PDF)
+    thumbnailUrl: { type: String, default: null }, 
+    
     size: { type: String }, // Nơi chứa dữ liệu dung lượng (VD: "17.50 MB")
     uploadDate: { type: Date, default: Date.now },
     status: { type: String, default: 'pending', enum: ['pending', 'verified', 'failed'] },

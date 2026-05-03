@@ -60,6 +60,14 @@ app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ limit: '25mb', extended: true }));
 
+// =========================================================================
+// [CẬP NHẬT TRỌNG TÂM]: Cho phép truy cập file tĩnh
+// =========================================================================
+
+// 1. Cho phép truy cập CÔNG KHAI vào thư mục thumbnails để App load ảnh bìa ngay lập tức
+app.use('/uploads/thumbnails', express.static(path.join(__dirname, 'uploads', 'thumbnails')));
+
+// 2. Route kiểm duyệt file gốc nằm ở uploads/ (Giữ nguyên logic của bạn)
 app.get('/uploads/:filename', async (req, res, next) => {
     try {
         const filename = req.params.filename;

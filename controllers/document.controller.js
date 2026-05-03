@@ -4,6 +4,8 @@ const { sendToQueue } = require('../services/rabbitmq.service');
 const { notifyDocumentFavorited } = require('../services/notification.service');
 const { validationResult } = require('express-validator');
 const fs = require('fs');
+const path = require('path');
+const { fromPath } = require('pdf2pic'); // [MỚI] Import thư viện cắt ảnh PDF
 
 class DocumentController {
     async upload(req, res, next) {
@@ -34,6 +36,37 @@ class DocumentController {
 
             const sizeInMB = (req.file.size / (1024 * 1024)).toFixed(2) + ' MB';
 
+            // ==========================================
+            // [MỚI]: XỬ LÝ TRÍCH XUẤT THUMBNAIL (Trang 1)
+            // ==========================================
+            let finalThumbnailUrl = null;
+            try {
+                // Tạo thư mục uploads/thumbnails nếu chưa tồn tại
+                const thumbDir = path.join(process.cwd(), 'uploads', 'thumbnails');
+                if (!fs.existsSync(thumbDir)) {
+                    fs.mkdirSync(thumbDir, { recursive: true });
+                }
+
+                // Cấu hình thư viện pdf2pic
+                const options = {
+                    density: 100, // Độ sắc nét
+                    saveFilename: `thumb_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+                    savePath: thumbDir,
+                    format: "png",
+                    width: 600,
+                    height: 800
+                };
+
+                const storeAsImage = fromPath(req.file.path, options);
+                
+                // Trích xuất trang 1 (index 1 trong pdf2pic)
+                const data = await storeAsImage(1, { responseType: "image" }); 
+                finalThumbnailUrl = `/uploads/thumbnails/${data.name}`;
+            } catch (thumbErr) {
+                req.log.warn({ err: thumbErr }, 'Khong the tao thumbnail, se tiep tuc luu document khong co anh bia');
+            }
+            // ==========================================
+
             createdDoc = await docRepo.create({
                 userId: req.user.uid,
                 title: title || 'Tai lieu khong ten',
@@ -43,11 +76,12 @@ class DocumentController {
                 description: description || '',
                 tags: tagsArray,
                 fileUrl: '/uploads/' + req.file.filename,
+                thumbnailUrl: finalThumbnailUrl, // [CẬP NHẬT] Lưu đường dẫn ảnh vào DB
                 size: sizeInMB,
                 status: 'pending'
             });
 
-            // [CẬP NHẬT]: Hàm này giờ đây sẽ dùng chung Connection & Channel siêu tốc
+            // Gửi vào hàng đợi RabbitMQ để quét virus hoặc các tác vụ nền khác
             await sendToQueue({
                 documentId: createdDoc._id,
                 title: createdDoc.title,
