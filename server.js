@@ -14,9 +14,10 @@ const admin = require('firebase-admin');
 
 const userRoutes = require('./routes/user.routes');
 const documentRoutes = require('./routes/document.routes');
+// [CẬP NHẬT 1]: Import route thông báo
+const notificationRoutes = require('./routes/notification.routes');
 const Document = require('./models/Document');
 
-// [CẬP NHẬT]: Import các hàm quản lý RabbitMQ dùng chung
 const { connectRabbitMQ, closeConnection } = require('./services/rabbitmq.service');
 
 const logger = pino({ level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' });
@@ -61,13 +62,13 @@ app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ limit: '25mb', extended: true }));
 
 // =========================================================================
-// [CẬP NHẬT TRỌNG TÂM]: Cho phép truy cập file tĩnh
+// Cho phép truy cập file tĩnh
 // =========================================================================
 
-// 1. Cho phép truy cập CÔNG KHAI vào thư mục thumbnails để App load ảnh bìa ngay lập tức
+// 1. Cho phép truy cập CÔNG KHAI vào thư mục thumbnails
 app.use('/uploads/thumbnails', express.static(path.join(__dirname, 'uploads', 'thumbnails')));
 
-// 2. Route kiểm duyệt file gốc nằm ở uploads/ (Giữ nguyên logic của bạn)
+// 2. Route kiểm duyệt file gốc nằm ở uploads/
 app.get('/uploads/:filename', async (req, res, next) => {
     try {
         const filename = req.params.filename;
@@ -102,7 +103,6 @@ app.get('/ready', async (req, res) => {
     let isRabbit = false;
 
     try {
-        // Vẫn giữ amqp.connect ở đây vì route này chủ yếu dùng để check health riêng biệt cho Docker/K8s
         const conn = await amqp.connect(process.env.RABBITMQ_URL);
         isRabbit = true;
         await conn.close();
@@ -113,6 +113,8 @@ app.get('/ready', async (req, res) => {
 
 app.use('/api/user', userRoutes);
 app.use('/api', documentRoutes);
+// [CẬP NHẬT 2]: Đăng ký đường dẫn cho notification
+app.use('/api/notifications', notificationRoutes);
 
 app.use((err, req, res, next) => {
     if (err.message && err.message.startsWith('INVALID_FILE_TYPE')) {
@@ -133,15 +135,11 @@ app.use((err, req, res, next) => {
     });
 });
 
-// [CẬP NHẬT]: Khởi tạo RabbitMQ ngay sau khi server lắng nghe port
 const server = app.listen(process.env.PORT || 3000, async () => {
     logger.info(`Server dang chay tai http://localhost:${process.env.PORT || 3000}`);
-    
-    // Mồi kết nối (Singleton)
     await connectRabbitMQ(logger);
 });
 
-// [CẬP NHẬT]: Bắt sự kiện tắt server (Ctrl + C) để dọn dẹp kết nối
 process.on('SIGINT', async () => {
     logger.info('Đang tắt server...');
     await closeConnection(logger);
