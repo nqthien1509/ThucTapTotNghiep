@@ -99,11 +99,22 @@ interface ApiService {
     // 5. THÔNG BÁO (NOTIFICATIONS)
     // =======================================================
 
-    // Lấy danh sách thông báo của user
+    // Lấy danh sách thông báo của user (Đã tích hợp phân trang)
     @GET("api/notifications")
-    suspend fun getNotifications(): List<AppNotification>
+    suspend fun getNotifications(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20
+    ): List<AppNotification>
 
     // Đánh dấu tất cả thông báo là đã đọc
     @PUT("api/notifications/read-all")
     suspend fun markAllAsRead(): Response<Unit>
+
+    // [MỚI] Đánh dấu MỘT thông báo là đã đọc
+    @PUT("api/notifications/{id}/read")
+    suspend fun markAsRead(@Path("id") id: String): Unit
+
+    // [MỚI] Xóa MỘT thông báo
+    @DELETE("api/notifications/{id}")
+    suspend fun deleteNotification(@Path("id") id: String): Unit
 }

@@ -5,44 +5,68 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.example.thuctaptotnghiep.MainActivity
 import com.example.thuctaptotnghiep.R
+import com.example.thuctaptotnghiep.data.model.AppNotification
+import com.example.thuctaptotnghiep.utils.NotificationEventBus
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
-import kotlin.random.Random
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
 
+        // Lấy dữ liệu từ push
         val title = remoteMessage.notification?.title ?: "Thông báo mới"
-        val body = remoteMessage.notification?.body ?: "Bạn có một cập nhật mới."
+        val body = remoteMessage.notification?.body ?: ""
+        val dataPayload = remoteMessage.data
 
-        // Truyền thêm data map từ backend để điều hướng
-        showNotification(title, body, remoteMessage.data)
+        // 1. Gửi thông báo lên hệ thống (Thanh trạng thái của điện thoại)
+        sendNotification(title, body, dataPayload)
+
+        // 2. Chuyển đổi data thành Model AppNotification để update giao diện Real-time
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.getDefault())
+        dateFormat.timeZone = TimeZone.getTimeZone("UTC")
+        val currentTimeIso = dateFormat.format(Date())
+
+        val newNotification = AppNotification(
+            _id = "temp_${System.currentTimeMillis()}", // Tạo ID tạm thời, khi refresh sẽ lấy ID thật từ DB
+            title = title,
+            body = body,
+            isRead = false,
+            data = dataPayload,
+            createdAt = currentTimeIso
+        )
+
+        // 3. Bắn event đi để ViewModel cập nhật giao diện ngay lập tức
+        CoroutineScope(Dispatchers.Main).launch {
+            NotificationEventBus.emitNewNotification(newNotification)
+        }
     }
 
-    private fun showNotification(title: String, message: String, data: Map<String, String>) {
-        val channelId = "kiem_duyet_tai_lieu"
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    override fun onNewToken(token: String) {
+        super.onNewToken(token)
+        // Lưu token lên server nếu bạn cần gửi đích danh cho thiết bị này (hiện tại bạn đang dùng topic nên có thể bỏ qua)
+    }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "Thông báo Kiểm duyệt",
-                NotificationManager.IMPORTANCE_HIGH
-            )
-            notificationManager.createNotificationChannel(channel)
-        }
+    private fun sendNotification(title: String, messageBody: String, data: Map<String, String>) {
+        val intent = Intent(this, MainActivity::class.java)
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
 
-        // [CẬP NHẬT]: Tạo PendingIntent để điều hướng khi click vào thông báo
-        val intent = Intent(this, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            // Nhét dữ liệu ẩn (như documentId) từ backend gửi kèm vào Intent
-            data.forEach { (key, value) -> putExtra(key, value) }
+        // Truyền thêm data vào Intent để xử lý khi người dùng nhấn từ Status Bar
+        data.forEach { (key, value) ->
+            intent.putExtra(key, value)
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -50,20 +74,29 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Thiết kế khung thông báo
-        val notification = NotificationCompat.Builder(this, channelId)
+        val channelId = "thuctaptotnghiep_channel"
+        val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+        val notificationBuilder = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(R.mipmap.ic_launcher) // Thay đổi icon cho phù hợp
             .setContentTitle(title)
-            .setContentText(message)
-            .setSmallIcon(R.mipmap.ic_launcher) // Đã chuyển sang dùng Icon App thay vì Icon Android mặc định
+            .setContentText(messageBody)
             .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent) // Gắn hành động click vào đây
-            .build()
+            .setSound(defaultSoundUri)
+            .setContentIntent(pendingIntent)
 
-        notificationManager.notify(Random.nextInt(), notification)
-    }
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    override fun onNewToken(token: String) {
-        super.onNewToken(token)
+        // Yêu cầu từ Android 8.0 (Oreo) trở lên phải có Notification Channel
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "Kênh thông báo tài liệu",
+                NotificationManager.IMPORTANCE_DEFAULT
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        notificationManager.notify(System.currentTimeMillis().toInt(), notificationBuilder.build())
     }
 }

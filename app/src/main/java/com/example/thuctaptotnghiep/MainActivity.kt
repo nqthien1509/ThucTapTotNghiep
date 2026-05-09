@@ -43,10 +43,14 @@ class MainActivity : ComponentActivity() {
         // Gọi hàm đăng ký trạm thu sóng Firebase
         subscribeToFirebaseTopic()
 
+        // [CẬP NHẬT Ở ĐÂY]: Lấy documentId từ Push Notification (nếu người dùng nhấn từ Status Bar)
+        val documentIdFromPush = intent.getStringExtra("documentId")
+
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    AppNavigation()
+                    // [CẬP NHẬT Ở ĐÂY]: Truyền documentId vào AppNavigation
+                    AppNavigation(initialDocumentId = documentIdFromPush)
                 }
             }
         }
@@ -58,25 +62,22 @@ class MainActivity : ComponentActivity() {
     private fun subscribeToFirebaseTopic() {
         val currentUser = FirebaseAuth.getInstance().currentUser
 
-        // Cập nhật: Lấy uid thay vì displayName để đảm bảo tính duy nhất
         val uid = currentUser?.uid
 
         if (!uid.isNullOrBlank()) {
-            // Cập nhật: Đồng bộ regex với backend: replace(/[^a-zA-Z0-9_\-]/g, '_')
             val sanitizedUid = uid.replace("[^a-zA-Z0-9_\\-]".toRegex(), "_")
             val topicName = "user_$sanitizedUid"
 
             FirebaseMessaging.getInstance().subscribeToTopic(topicName)
                 .addOnCompleteListener { task ->
                     if (task.isSuccessful) {
-                        Log.d("FCM", "✅ Đã đăng ký thành công kênh nhận thông báo: $topicName")
+                        Log.d("FCM", " Đã đăng ký thành công kênh nhận thông báo: $topicName")
                     } else {
-                        Log.e("FCM", "❌ Đăng ký kênh thất bại", task.exception)
+                        Log.e("FCM", " Đăng ký kênh thất bại", task.exception)
                     }
                 }
         } else {
-            // Log cảnh báo nếu user chưa đăng nhập hoặc không lấy được uid
-            Log.w("FCM", "⚠️ Chưa đăng nhập hoặc không tìm thấy uid")
+            Log.w("FCM", " Chưa đăng nhập hoặc không tìm thấy uid")
         }
     }
 
@@ -88,10 +89,8 @@ class MainActivity : ComponentActivity() {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
                 PackageManager.PERMISSION_GRANTED
             ) {
-                // Nếu người dùng đã cấp quyền trước đó rồi thì không làm gì cả
                 Log.d("FCM", "Quyền thông báo đã được cấp sẵn.")
             } else {
-                // Mở bảng pop-up xin quyền
                 requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }

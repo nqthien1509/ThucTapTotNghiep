@@ -1,7 +1,8 @@
 package com.example.thuctaptotnghiep.ui
 
 import androidx.compose.runtime.Composable
-import androidx.hilt.navigation.compose.hiltViewModel // [CẬP NHẬT]: Import hiltViewModel thay vì viewModel thường
+import androidx.compose.runtime.LaunchedEffect
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -20,16 +21,18 @@ import com.example.thuctaptotnghiep.ui.notification.NotificationViewModel
 import com.google.firebase.auth.FirebaseAuth
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(initialDocumentId: String? = null) {
     val navController = rememberNavController()
 
-    // Kiểm tra trạng thái đăng nhập để chọn màn hình khởi đầu
     val currentUser = FirebaseAuth.getInstance().currentUser
     val startRoute = if (currentUser != null) "home" else "login"
 
-    // =======================================================
-    // HÀM TỐI ƯU ĐIỀU HƯỚNG BOTTOM BAR (CHUẨN GOOGLE)
-    // =======================================================
+    LaunchedEffect(initialDocumentId) {
+        if (!initialDocumentId.isNullOrEmpty() && currentUser != null) {
+            navController.navigate("document_detail/$initialDocumentId")
+        }
+    }
+
     val navigateToBottomTab = { route: String ->
         navController.navigate(route) {
             popUpTo(navController.graph.findStartDestination().id) {
@@ -42,7 +45,6 @@ fun AppNavigation() {
 
     NavHost(navController = navController, startDestination = startRoute) {
 
-        // 1. Màn hình Đăng nhập
         composable("login") {
             LoginScreen(
                 onLoginSuccess = {
@@ -56,7 +58,6 @@ fun AppNavigation() {
             )
         }
 
-        // 2. Màn hình Đăng ký
         composable("register") {
             RegisterScreen(
                 onRegisterSuccess = {
@@ -70,7 +71,6 @@ fun AppNavigation() {
             )
         }
 
-        // 3. Màn hình Chính (Home)
         composable("home") {
             HomeScreen(
                 onNavigateToUpload = { navigateToBottomTab("upload") },
@@ -86,7 +86,6 @@ fun AppNavigation() {
             )
         }
 
-        // 4. Màn hình Chi tiết tài liệu
         composable(
             route = "document_detail/{id}",
             arguments = listOf(navArgument("id") { type = NavType.StringType })
@@ -103,7 +102,6 @@ fun AppNavigation() {
             )
         }
 
-        // 5. Màn hình Upload tài liệu
         composable("upload") {
             UploadScreen(
                 onBackClick = { navController.popBackStack() },
@@ -115,7 +113,6 @@ fun AppNavigation() {
             )
         }
 
-        // 6. Màn hình Hồ sơ (Profile)
         composable("profile") {
             ProfileScreen(
                 onBackClick = { navigateToBottomTab("home") },
@@ -133,7 +130,6 @@ fun AppNavigation() {
             )
         }
 
-        // 7. Màn hình Tìm kiếm (Search)
         composable(
             route = "search?category={category}",
             arguments = listOf(navArgument("category") {
@@ -153,15 +149,17 @@ fun AppNavigation() {
             )
         }
 
-        // 8. Màn hình Thông báo (Notification Center)
         composable("notifications") {
-            // [CẬP NHẬT]: Dùng hiltViewModel() để Hilt tự động tiêm ApiService vào ViewModel
             val viewModel: NotificationViewModel = hiltViewModel()
 
             NotificationScreen(
                 viewModel = viewModel,
                 onNavigateToDocument = { documentId ->
                     navController.navigate("document_detail/$documentId")
+                },
+                // [THÊM]: Xử lý sự kiện quay lại bằng cách popBackStack
+                onBackClick = {
+                    navController.popBackStack()
                 }
             )
         }
