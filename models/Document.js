@@ -27,7 +27,9 @@ const documentSchema = new mongoose.Schema({
     
     // Mảng lưu danh sách UID của những người đã thả tim/xem sau
     favoritedBy: { type: [String], default: [], index: true },
-    watchLaterBy: { type: [String], default: [], index: true }
+    watchLaterBy: { type: [String], default: [], index: true },
+    views: { type: Number, default: 0 },
+    downloads: { type: Number, default: 0 },
 });
 
 module.exports = mongoose.model('Document', documentSchema);

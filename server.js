@@ -1,6 +1,8 @@
 ﻿﻿require('dotenv').config();
 
 const express = require('express');
+const http = require('http'); 
+const { Server } = require('socket.io'); 
 const mongoose = require('mongoose');
 const path = require('path');
 const amqp = require('amqplib');
@@ -12,14 +14,19 @@ const pino = require('pino');
 const pinoHttp = require('pino-http');
 const admin = require('firebase-admin');
 
+// --- Import Routes ---
 const userRoutes = require('./routes/user.routes');
 const documentRoutes = require('./routes/document.routes');
-// [CẬP NHẬT 1]: Import route thông báo
 const notificationRoutes = require('./routes/notification.routes');
-const Document = require('./models/Document');
+const requestRoutes = require('./routes/request.routes'); 
+const chatRoutes = require('./routes/chat.routes');        
 
+// --- Import Models & Services ---
+const Document = require('./models/Document');
+const Message = require('./models/Message'); 
 const { connectRabbitMQ, closeConnection } = require('./services/rabbitmq.service');
 
+// --- Cấu hình Logger ---
 const logger = pino({ level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' });
 const loggerMiddleware = pinoHttp({
     logger,
@@ -31,13 +38,17 @@ const loggerMiddleware = pinoHttp({
     autoLogging: { ignore: (req) => req.url === '/health' || req.url === '/ready' }
 });
 
+// --- Khởi tạo Firebase Admin ---
 const serviceAccount = require('./firebase-key.json');
 if (!admin.apps.length) {
     admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 }
 
+// --- Khởi tạo App & Server ---
 const app = express();
+const server = http.createServer(app); 
 
+// --- Cấu hình CORS ---
 const corsOrigins = (process.env.CORS_ORIGINS || '')
     .split(',')
     .map((origin) => origin.trim())
@@ -52,8 +63,14 @@ const corsOptions = process.env.NODE_ENV === 'production'
             return callback(new Error('CORS_NOT_ALLOWED'));
         }
     }
-    : { origin: true };
+    : { origin: '*' }; 
 
+// --- Khởi tạo Socket.IO ---
+const io = new Server(server, {
+    cors: corsOptions
+});
+
+// --- Cấu hình Middlewares ---
 app.use(loggerMiddleware);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors(corsOptions));
@@ -62,13 +79,11 @@ app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ limit: '25mb', extended: true }));
 
 // =========================================================================
-// Cho phép truy cập file tĩnh
+// QUẢN LÝ FILE TĨNH & KIỂM DUYỆT TÀI LIỆU
 // =========================================================================
 
-// 1. Cho phép truy cập CÔNG KHAI vào thư mục thumbnails
 app.use('/uploads/thumbnails', express.static(path.join(__dirname, 'uploads', 'thumbnails')));
 
-// 2. Route kiểm duyệt file gốc nằm ở uploads/
 app.get('/uploads/:filename', async (req, res, next) => {
     try {
         const filename = req.params.filename;
@@ -88,15 +103,17 @@ app.get('/uploads/:filename', async (req, res, next) => {
     }
 });
 
-mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/thuctaptotnghiep_db')
-    .then(() => logger.info('Da ket noi MongoDB!'))
-    .catch((err) => logger.fatal({ err }, 'Loi MongoDB'));
+// =========================================================================
+// ĐĂNG KÝ REST API ROUTES
+// =========================================================================
 
-if (!process.env.RABBITMQ_URL) {
-    logger.fatal('Thieu bien moi truong RABBITMQ_URL');
-    process.exit(1);
-}
+app.use('/api/user', userRoutes);
+app.use('/api', documentRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/requests', requestRoutes); 
+app.use('/api/chat', chatRoutes);        
 
+// --- Health Checks ---
 app.get('/health', (req, res) => res.status(200).json({ status: 'UP' }));
 app.get('/ready', async (req, res) => {
     const isMongo = mongoose.connection.readyState === 1;
@@ -111,11 +128,7 @@ app.get('/ready', async (req, res) => {
     res.status((isMongo && isRabbit) ? 200 : 503).json({ status: (isMongo && isRabbit) ? 'READY' : 'NOT_READY' });
 });
 
-app.use('/api/user', userRoutes);
-app.use('/api', documentRoutes);
-// [CẬP NHẬT 2]: Đăng ký đường dẫn cho notification
-app.use('/api/notifications', notificationRoutes);
-
+// --- Middleware Bắt Lỗi Toàn Cục ---
 app.use((err, req, res, next) => {
     if (err.message && err.message.startsWith('INVALID_FILE_TYPE')) {
         return res.status(400).json({ message: err.message.split(': ')[1] });
@@ -126,20 +139,91 @@ app.use((err, req, res, next) => {
     }
 
     if (err.message === 'CORS_NOT_ALLOWED') {
-        return res.status(403).json({ message: 'Origin khong duoc phep truy cap API.' });
+        return res.status(403).json({ message: 'Origin không được phép truy cập API.' });
     }
 
     req.log.error({ err }, '[UNHANDLED_ERROR]');
     res.status(err.status || 500).json({
-        message: process.env.NODE_ENV === 'production' && !err.status ? 'Loi he thong!' : err.message
+        message: process.env.NODE_ENV === 'production' && !err.status ? 'Lỗi hệ thống!' : err.message
     });
 });
 
-const server = app.listen(process.env.PORT || 3000, async () => {
-    logger.info(`Server dang chay tai http://localhost:${process.env.PORT || 3000}`);
-    await connectRabbitMQ(logger);
+// =========================================================================
+// XỬ LÝ SOCKET.IO (REAL-TIME CHAT)
+// =========================================================================
+
+io.on('connection', (socket) => {
+    logger.info(` Client connected to Socket: ${socket.id}`);
+
+    // Tham gia vào phòng chat
+    socket.on('join_room', (conversationId) => {
+        socket.join(conversationId);
+        logger.info(` User joined room: ${conversationId}`);
+    });
+
+    // Lắng nghe sự kiện gửi tin nhắn mới
+    socket.on('send_message', async (data) => {
+        try {
+            logger.info(` Nhận được dữ liệu Socket gửi lên: ${JSON.stringify(data)}`);
+            
+            // Ép kiểu an toàn (trường hợp Android gửi lên JSON string thay vì Object)
+            let parsedData = data;
+            if (typeof data === 'string') {
+                parsedData = JSON.parse(data);
+            }
+
+            const { conversationId, senderId, text } = parsedData;
+
+            if (!conversationId || !senderId || !text) {
+                logger.warn(' Dữ liệu tin nhắn bị thiếu trường (conversationId, senderId hoặc text)!');
+                return;
+            }
+
+            // 1. Lưu tin nhắn vào Database
+            const newMessage = await Message.create({
+                conversationId,
+                senderId,
+                text
+            });
+
+            logger.info(` Đã lưu tin nhắn vào DB, tiến hành phát tới phòng: ${conversationId}`);
+
+            // 2. Phát (emit) tin nhắn này tới tất cả mọi người trong phòng (Kể cả người vừa gửi)
+            io.to(conversationId).emit('receive_message', newMessage);
+
+        } catch (error) {
+            logger.error(' Lỗi khi gửi qua Socket:', error);
+        }
+    });
+
+    socket.on('disconnect', () => {
+        logger.info(` Client disconnected: ${socket.id}`);
+    });
 });
 
+// =========================================================================
+// KHỞI ĐỘNG SERVER & KẾT NỐI DATABASE
+// =========================================================================
+
+const PORT = process.env.PORT || 3000;
+
+mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/thuctaptotnghiep_db')
+    .then(async () => {
+        logger.info(' Đã kết nối MongoDB!');
+        
+        if (!process.env.RABBITMQ_URL) {
+            logger.fatal('Thiếu biến môi trường RABBITMQ_URL');
+            process.exit(1);
+        }
+        await connectRabbitMQ(logger);
+
+        server.listen(PORT, () => {
+            logger.info(` Server đang chạy tại http://localhost:${PORT}`);
+        });
+    })
+    .catch((err) => logger.fatal({ err }, ' Lỗi kết nối MongoDB'));
+
+// --- Xử lý khi tắt server đột ngột ---
 process.on('SIGINT', async () => {
     logger.info('Đang tắt server...');
     await closeConnection(logger);

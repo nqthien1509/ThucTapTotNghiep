@@ -5,7 +5,8 @@ const { notifyDocumentFavorited } = require('../services/notification.service');
 const { validationResult } = require('express-validator');
 const fs = require('fs');
 const path = require('path');
-const { fromPath } = require('pdf2pic'); // [MỚI] Import thư viện cắt ảnh PDF
+const { fromPath } = require('pdf2pic'); 
+const Document = require('../models/Document'); // [QUAN TRỌNG]: Phải import model Document để dùng findByIdAndUpdate
 
 class DocumentController {
     async upload(req, res, next) {
@@ -37,19 +38,17 @@ class DocumentController {
             const sizeInMB = (req.file.size / (1024 * 1024)).toFixed(2) + ' MB';
 
             // ==========================================
-            // [MỚI]: XỬ LÝ TRÍCH XUẤT THUMBNAIL (Trang 1)
+            // XỬ LÝ TRÍCH XUẤT THUMBNAIL (Trang 1)
             // ==========================================
             let finalThumbnailUrl = null;
             try {
-                // Tạo thư mục uploads/thumbnails nếu chưa tồn tại
                 const thumbDir = path.join(process.cwd(), 'uploads', 'thumbnails');
                 if (!fs.existsSync(thumbDir)) {
                     fs.mkdirSync(thumbDir, { recursive: true });
                 }
 
-                // Cấu hình thư viện pdf2pic
                 const options = {
-                    density: 100, // Độ sắc nét
+                    density: 100, 
                     saveFilename: `thumb_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
                     savePath: thumbDir,
                     format: "png",
@@ -59,7 +58,6 @@ class DocumentController {
 
                 const storeAsImage = fromPath(req.file.path, options);
                 
-                // Trích xuất trang 1 (index 1 trong pdf2pic)
                 const data = await storeAsImage(1, { responseType: "image" }); 
                 finalThumbnailUrl = `/uploads/thumbnails/${data.name}`;
             } catch (thumbErr) {
@@ -76,12 +74,11 @@ class DocumentController {
                 description: description || '',
                 tags: tagsArray,
                 fileUrl: '/uploads/' + req.file.filename,
-                thumbnailUrl: finalThumbnailUrl, // [CẬP NHẬT] Lưu đường dẫn ảnh vào DB
+                thumbnailUrl: finalThumbnailUrl, 
                 size: sizeInMB,
                 status: 'pending'
             });
 
-            // Gửi vào hàng đợi RabbitMQ để quét virus hoặc các tác vụ nền khác
             await sendToQueue({
                 documentId: createdDoc._id,
                 title: createdDoc.title,
@@ -223,6 +220,29 @@ class DocumentController {
         } catch (error) {
             if (error.message === 'FORBIDDEN') return res.status(403).json({ message: 'Ban khong co quyen xoa tai lieu nay!' });
             if (error.message === 'NOT_FOUND') return res.status(404).json({ message: 'Tai lieu khong ton tai!' });
+            next(error);
+        }
+    }
+
+    // ============================================================
+    // [ĐÃ SỬA]: ĐƯA 2 HÀM NÀY VÀO TRONG CLASS
+    // ============================================================
+    async incrementView(req, res, next) {
+        try {
+            const { id } = req.params;
+            await Document.findByIdAndUpdate(id, { $inc: { views: 1 } });
+            res.status(200).json({ success: true, message: "Đã tăng lượt xem" });
+        } catch (error) {
+            next(error); // Dùng next(error) để đồng bộ với hàm xử lý lỗi tổng của bạn
+        }
+    }
+
+    async incrementDownload(req, res, next) {
+        try {
+            const { id } = req.params;
+            await Document.findByIdAndUpdate(id, { $inc: { downloads: 1 } });
+            res.status(200).json({ success: true, message: "Đã tăng lượt tải" });
+        } catch (error) {
             next(error);
         }
     }
