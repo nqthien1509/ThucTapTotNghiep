@@ -1,7 +1,7 @@
 package com.example.thuctaptotnghiep.data.repository
 
 import com.example.thuctaptotnghiep.data.model.Document
-import com.example.thuctaptotnghiep.data.model.UploadResponse // <-- THÊM IMPORT NÀY
+import com.example.thuctaptotnghiep.data.model.UploadResponse
 import com.example.thuctaptotnghiep.data.model.User
 import com.example.thuctaptotnghiep.data.network.ApiService
 import okhttp3.MultipartBody
@@ -21,7 +21,6 @@ class DocumentRepository @Inject constructor(
         return apiService.getDocuments()
     }
 
-    // CẢI TIẾN QUAN TRỌNG: Trả về UploadResponse để khớp với ApiService và JSON từ Backend
     suspend fun uploadDocument(
         file: MultipartBody.Part,
         title: RequestBody,
@@ -30,7 +29,7 @@ class DocumentRepository @Inject constructor(
         category: RequestBody,
         description: RequestBody,
         tags: RequestBody
-    ): UploadResponse { // <-- ĐỔI THÀNH UploadResponse
+    ): UploadResponse {
         return apiService.uploadDocument(
             file, title, authorName, subject, category, description, tags
         )
@@ -57,6 +56,16 @@ class DocumentRepository @Inject constructor(
 
     suspend fun toggleWatchLater(documentId: String) {
         apiService.toggleWatchLater(documentId)
+    }
+
+    // [MỚI THÊM]: Gọi API tăng lượt xem
+    suspend fun incrementView(documentId: String) {
+        apiService.incrementView(documentId)
+    }
+
+    // [MỚI THÊM]: Gọi API tăng lượt tải
+    suspend fun incrementDownload(documentId: String) {
+        apiService.incrementDownload(documentId)
     }
 
     // ==========================================

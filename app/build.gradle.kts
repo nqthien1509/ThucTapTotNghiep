@@ -87,4 +87,5 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
 
     implementation("io.github.grizzi91:bouquet:1.1.2")
+    implementation("io.socket:socket.io-client:2.1.0")
 }

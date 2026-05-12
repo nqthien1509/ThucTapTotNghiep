@@ -1,9 +1,14 @@
 package com.example.thuctaptotnghiep.data.network
 
-import com.example.thuctaptotnghiep.data.model.AppNotification // <-- Import model thông báo
+import com.example.thuctaptotnghiep.data.model.AppNotification
+import com.example.thuctaptotnghiep.data.model.BaseResponse
 import com.example.thuctaptotnghiep.data.model.Document
 import com.example.thuctaptotnghiep.data.model.UploadResponse
 import com.example.thuctaptotnghiep.data.model.User
+import com.example.thuctaptotnghiep.data.model.Request
+import com.example.thuctaptotnghiep.data.model.Conversation
+import com.example.thuctaptotnghiep.data.model.Message
+
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
@@ -51,6 +56,12 @@ interface ApiService {
 
     @DELETE("api/documents/{id}")
     suspend fun deleteDocument(@Path("id") id: String): Unit
+
+    @PUT("api/documents/{id}/view")
+    suspend fun incrementView(@Path("id") documentId: String)
+
+    @PUT("api/documents/{id}/download")
+    suspend fun incrementDownload(@Path("id") documentId: String)
 
     // =======================================================
     // 2. TƯƠNG TÁC (FAVORITE / WATCH LATER)
@@ -110,11 +121,40 @@ interface ApiService {
     @PUT("api/notifications/read-all")
     suspend fun markAllAsRead(): Response<Unit>
 
-    // [MỚI] Đánh dấu MỘT thông báo là đã đọc
+    // Đánh dấu MỘT thông báo là đã đọc
     @PUT("api/notifications/{id}/read")
     suspend fun markAsRead(@Path("id") id: String): Unit
 
-    // [MỚI] Xóa MỘT thông báo
+    // Xóa MỘT thông báo
     @DELETE("api/notifications/{id}")
     suspend fun deleteNotification(@Path("id") id: String): Unit
+
+    // =======================================================
+    // 6. CỘNG ĐỒNG (COMMUNITY / REQUESTS) - [MỚI]
+    // =======================================================
+
+    // Lấy danh sách bài đăng xin tài liệu
+    @GET("api/requests")
+    suspend fun getRequests(): Response<BaseResponse<List<Request>>>
+    // Ghi chú: Nếu BE trả về { "success": true, "data": [...] }, bạn cần tạo thêm 1 class BaseResponse<T>(val success: Boolean, val data: T).
+    // Nếu BE trả về trực tiếp mảng [...] thì đổi thành suspend fun getRequests(): List<Request>
+
+    // Tạo bài đăng xin tài liệu mới
+    @POST("api/requests")
+    suspend fun createRequest(@Body body: Map<String, String>): Response<BaseResponse<Request>>
+
+    // =======================================================
+    // 7. NHẮN TIN (CHAT) - [MỚI]
+    // =======================================================
+
+    // Gọi khi bấm "Trả lời", BE sẽ kiểm tra nếu đã có phòng chat thì trả về ID cũ, chưa thì tạo phòng mới
+    @POST("api/chat/conversations")
+    suspend fun getOrCreateConversation(@Body body: Map<String, String>): Response<BaseResponse<Conversation>>
+
+    // Lấy lịch sử tin nhắn của một phòng chat cụ thể để load lên giao diện
+    @GET("api/chat/messages/{conversationId}")
+    suspend fun getMessages(@Path("conversationId") conversationId: String): Response<BaseResponse<List<Message>>>
+
+    @GET("api/chat/conversations/me")
+    suspend fun getMyConversations(): Response<BaseResponse<List<Conversation>>>
 }

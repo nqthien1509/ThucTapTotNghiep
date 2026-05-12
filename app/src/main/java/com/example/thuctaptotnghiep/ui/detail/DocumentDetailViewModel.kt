@@ -34,7 +34,7 @@ class DocumentDetailViewModel @Inject constructor(
     private val _isWatchLater = MutableStateFlow(false)
     val isWatchLater: StateFlow<Boolean> = _isWatchLater.asStateFlow()
 
-    // CẢI TIẾN 1: Trạng thái khóa nút (Chống click liên tục / Spam click)
+    // Trạng thái khóa nút (Chống click liên tục / Spam click)
     private val _isTogglingAction = MutableStateFlow(false)
     val isTogglingAction: StateFlow<Boolean> = _isTogglingAction.asStateFlow()
 
@@ -57,9 +57,8 @@ class DocumentDetailViewModel @Inject constructor(
         }
     }
 
-    // CẢI TIẾN 2: Hàm làm sạch tên file để tải xuống (Sanitize Filename)
+    // Hàm làm sạch tên file để tải xuống (Sanitize Filename)
     fun getSafeFileName(originalTitle: String, extension: String = ".pdf"): String {
-        // Regex tìm các ký tự không được phép đặt tên file trong hệ thống
         val invalidChars = "[\\\\/:*?\"<>|]".toRegex()
         val safeName = originalTitle.replace(invalidChars, "_").trim()
 
@@ -71,48 +70,80 @@ class DocumentDetailViewModel @Inject constructor(
     }
 
     // =======================================================
+    // [CẬP NHẬT MỚI]: TĂNG LƯỢT XEM VÀ TẢI (OPTIMISTIC UI)
+    // =======================================================
+    fun incrementViewCount(documentId: String) {
+        viewModelScope.launch {
+            try {
+                // 1. Cập nhật UI ngay lập tức: Cộng thêm 1 vào views hiện tại
+                _document.value = _document.value?.let { currentDoc ->
+                    // Giả sử views là Int. Nếu null thì mặc định 0 rồi cộng 1
+                    currentDoc.copy(views = (currentDoc.views ?: 0) + 1)
+                }
+
+                // 2. Gọi API để Backend lưu vào Database
+                // LƯU Ý: Bạn cần đảm bảo đã tạo hàm incrementView trong DocumentRepository nhé!
+                repository.incrementView(documentId)
+            } catch (e: Exception) {
+                e.printStackTrace() // Lỗi đếm view thì chỉ in log, không cần gián đoạn người dùng
+            }
+        }
+    }
+
+    fun incrementDownloadCount(documentId: String) {
+        viewModelScope.launch {
+            try {
+                // 1. Cập nhật UI ngay lập tức: Cộng thêm 1 vào downloads hiện tại
+                _document.value = _document.value?.let { currentDoc ->
+                    currentDoc.copy(downloads = (currentDoc.downloads ?: 0) + 1)
+                }
+
+                // 2. Gọi API để Backend lưu vào Database
+                // LƯU Ý: Bạn cần đảm bảo đã tạo hàm incrementDownload trong DocumentRepository!
+                repository.incrementDownload(documentId)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // =======================================================
     // HÀM XỬ LÝ TƯƠNG TÁC (OPTIMISTIC UI + DEBOUNCE)
     // =======================================================
 
     fun toggleFavorite(documentId: String) {
-        // Ngăn chặn gọi API liên tục nếu đang xử lý request trước đó
         if (_isTogglingAction.value) return
 
         viewModelScope.launch {
             _isTogglingAction.value = true
             val currentState = _isFavorite.value
-            _isFavorite.value = !currentState // Cập nhật UI ngay lập tức
+            _isFavorite.value = !currentState
 
             try {
                 repository.toggleFavorite(documentId)
             } catch (e: Exception) {
-                // Nếu gọi API thất bại, đảo ngược UI về như cũ
                 _isFavorite.value = currentState
                 _errorMessage.value = "Lỗi khi cập nhật yêu thích: ${e.message}"
             } finally {
-                // Mở khóa nút khi hoàn tất luồng
                 _isTogglingAction.value = false
             }
         }
     }
 
     fun toggleWatchLater(documentId: String) {
-        // Ngăn chặn gọi API liên tục nếu đang xử lý request trước đó
         if (_isTogglingAction.value) return
 
         viewModelScope.launch {
             _isTogglingAction.value = true
             val currentState = _isWatchLater.value
-            _isWatchLater.value = !currentState // Cập nhật UI ngay lập tức
+            _isWatchLater.value = !currentState
 
             try {
                 repository.toggleWatchLater(documentId)
             } catch (e: Exception) {
-                // Nếu gọi API thất bại, đảo ngược UI về như cũ
                 _isWatchLater.value = currentState
                 _errorMessage.value = "Lỗi khi cập nhật xem sau: ${e.message}"
             } finally {
-                // Mở khóa nút khi hoàn tất luồng
                 _isTogglingAction.value = false
             }
         }

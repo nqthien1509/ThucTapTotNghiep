@@ -4,8 +4,8 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,8 +23,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -39,11 +40,9 @@ import com.example.thuctaptotnghiep.data.model.Document
 import com.example.thuctaptotnghiep.ui.components.AppBottomNavigationBar
 import com.google.firebase.auth.FirebaseAuth
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.Role
 import com.example.thuctaptotnghiep.ui.components.EmptyStateView
 import com.example.thuctaptotnghiep.ui.components.LoadingStateView
-import com.example.thuctaptotnghiep.utils.toFullUrl // Import hàm xử lý URL
+import com.example.thuctaptotnghiep.utils.toFullUrl
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,7 +57,6 @@ fun ProfileScreen(
 ) {
     val context = LocalContext.current
 
-    // CẢI TIẾN: Lắng nghe danh sách và các ID đang chờ xóa (Undo)
     val myDocuments by viewModel.myDocuments.collectAsState()
     val favoriteDocuments by viewModel.favoriteDocuments.collectAsState()
     val watchLaterDocuments by viewModel.watchLaterDocuments.collectAsState()
@@ -71,7 +69,6 @@ fun ProfileScreen(
 
     val userProfile by viewModel.userProfile.collectAsState()
 
-    // Khai báo Snackbar cho tính năng Hoàn tác
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -81,7 +78,7 @@ fun ProfileScreen(
     val sheetState = rememberModalBottomSheetState()
 
     var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("Tài liệu đã đăng", "Yêu thích", "Xem sau")
+    val tabs = listOf("Đã đăng", "Yêu thích", "Xem sau")
 
     val currentList = when (selectedTabIndex) {
         0 -> myDocuments
@@ -104,16 +101,16 @@ fun ProfileScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) }, // Gắn SnackbarHost vào Scaffold
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             AppBottomNavigationBar(
                 onHomeClick = onBackClick,
                 onUploadClick = onUploadClick,
-                onProfileClick = { /* Đang ở Profile */ },
+                onProfileClick = { },
                 onSearchClick = onSearchClick
             )
         },
-        containerColor = Color(0xFFF8F9FA)
+        containerColor = Color(0xFFF8F9FA) // Nền sáng thanh lịch
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
 
@@ -121,18 +118,25 @@ fun ProfileScreen(
             val screenHeight = configuration.screenHeightDp.dp
             val headerHeight = screenHeight * 0.28f
 
-            // Header lượn sóng
-            Box(modifier = Modifier.fillMaxWidth().height(headerHeight)) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val path = Path().apply {
-                        lineTo(0f, size.height * 0.75f)
-                        quadraticBezierTo(size.width * 0.4f, size.height + 20f, size.width, size.height * 0.6f)
-                        lineTo(size.width, 0f)
-                        close()
-                    }
-                    drawPath(path, Color(0xFF4C9EEB))
-                }
+            // [CẬP NHẬT UI]: Header Gradient hiện đại, bo góc sâu
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(headerHeight + 20.dp) // Tăng height chút để bù cho phần vát góc
+            ) {
+                // Background Gradient
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(headerHeight)
+                        .background(
+                            brush = Brush.verticalGradient(listOf(Color(0xFF4C9EEB), Color(0xFF1E88E5))),
+                            shape = RoundedCornerShape(bottomStart = 40.dp, bottomEnd = 40.dp)
+                        )
+                        .shadow(4.dp, RoundedCornerShape(bottomStart = 40.dp, bottomEnd = 40.dp))
+                )
 
+                // Nút cài đặt góc trên phải
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -142,93 +146,127 @@ fun ProfileScreen(
                     IconButton(onClick = { showBottomSheet = true }) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(40.dp)
                                 .background(Color.White.copy(alpha = 0.2f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Settings, contentDescription = "Cài đặt", tint = Color.White, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Default.Settings, contentDescription = "Cài đặt", tint = Color.White)
                         }
                     }
                 }
 
+                // Thông tin User
                 Row(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .statusBarsPadding()
-                        .padding(top = 16.dp, start = 24.dp)
-                        .fillMaxWidth()
-                        .padding(end = 60.dp),
+                        .padding(top = 24.dp, start = 24.dp, end = 64.dp)
+                        .fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val displayUserName = userProfile?.displayName?.takeIf { it.isNotBlank() } ?: viewModel.userName
                     val displaySchool = userProfile?.school?.takeIf { it.isNotBlank() } ?: "Sinh viên UTH"
 
+                    // [CẬP NHẬT UI]: Avatar có viền trắng và bóng mờ
                     Box(
                         modifier = Modifier
-                            .size(70.dp)
-                            .background(Color.White.copy(alpha = 0.3f), CircleShape)
+                            .size(76.dp)
+                            .shadow(8.dp, CircleShape)
+                            .border(3.dp, Color.White, CircleShape)
+                            .background(Color.White, CircleShape)
                             .clip(CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         if (!userProfile?.avatarUrl.isNullOrBlank()) {
-                            // CẢI TIẾN: Sử dụng toFullUrl() thay cho IP cứng
-                            val fullImageUrl = userProfile?.avatarUrl?.toFullUrl()
                             AsyncImage(
-                                model = fullImageUrl,
-                                contentDescription = "Ảnh đại diện của $displayUserName",
+                                model = userProfile?.avatarUrl?.toFullUrl(),
+                                contentDescription = "Ảnh đại diện",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
-                            Text(
-                                text = displayUserName.take(1).uppercase(),
-                                color = Color.White,
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Box(modifier = Modifier.fillMaxSize().background(Color(0xFFE3F2FD)), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = displayUserName.take(1).uppercase(),
+                                    color = Color(0xFF4C9EEB),
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = displayUserName, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        Text(text = displaySchool, fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
+                        Text(text = displayUserName, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(text = displaySchool, fontSize = 14.sp, color = Color.White.copy(alpha = 0.9f), maxLines = 1, overflow = TextOverflow.Ellipsis)
 
                         if (!userProfile?.bio.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(text = userProfile!!.bio!!, fontSize = 12.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(text = userProfile!!.bio!!, fontSize = 13.sp, color = Color.White.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
 
-                Box(
+                // [CẬP NHẬT UI]: Thẻ nổi lơ lửng hiển thị điểm cống hiến
+                Card(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .offset(y = (-10).dp)
-                        .background(Color.White, RoundedCornerShape(20.dp))
-                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                        .padding(horizontal = 40.dp)
+                        .fillMaxWidth()
+                        .shadow(12.dp, RoundedCornerShape(24.dp), spotColor = Color(0x26000000)),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.EmojiEvents, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Điểm cống hiến: ${myDocuments.size * 10}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4C9EEB))
+                    Row(
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier.size(36.dp).background(Color(0xFFFFF8E1), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.WorkspacePremium, contentDescription = null, tint = Color(0xFFFFC107), modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text("Điểm cống hiến", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                            Text("${myDocuments.size * 10} Pt", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E293B))
+                        }
                     }
                 }
             }
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // TabRow thanh thoát hơn
             TabRow(
                 selectedTabIndex = selectedTabIndex,
-                containerColor = Color.White,
+                containerColor = Color.Transparent,
                 contentColor = Color(0xFF4C9EEB),
                 indicator = { tabPositions ->
-                    TabRowDefaults.Indicator(modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]), color = Color(0xFF4C9EEB), height = 3.dp)
-                }
+                    TabRowDefaults.Indicator(
+                        modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
+                        color = Color(0xFF4C9EEB),
+                        height = 3.dp
+                    )
+                },
+                divider = {} // Xoá gạch chân mờ mặc định
             ) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
                         selected = selectedTabIndex == index,
                         onClick = { selectedTabIndex = index },
-                        text = { Text(text = title, fontSize = 13.sp, fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal) }
+                        text = {
+                            Text(
+                                text = title,
+                                fontSize = 14.sp,
+                                fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium,
+                                color = if (selectedTabIndex == index) Color(0xFF1E293B) else Color.Gray
+                            )
+                        }
                     )
                 }
             }
@@ -243,7 +281,6 @@ fun ProfileScreen(
                         isLoading && !isRefreshing -> {
                             LoadingStateView()
                         }
-                        // Lọc các item đang chờ xóa để tính toán xem list có rỗng không
                         currentList.filter { !pendingDeleteIds.contains(it.id) }.isEmpty() -> {
                             val emptyMessage = when (selectedTabIndex) {
                                 0 -> "Bạn chưa đăng tài liệu nào."
@@ -258,10 +295,9 @@ fun ProfileScreen(
                         else -> {
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                // CẢI TIẾN: Chỉ render các item KHÔNG nằm trong danh sách pendingDeleteIds
                                 val visibleDocs = currentList.filter { !pendingDeleteIds.contains(it.id) }
 
                                 items(visibleDocs, key = { it.id }) { doc ->
@@ -270,13 +306,12 @@ fun ProfileScreen(
                                         isOwner = selectedTabIndex == 0,
                                         onClick = { onDocumentClick(doc.id) },
                                         onDeleteClick = {
-                                            // CẢI TIẾN: Gọi tính năng Undo thay vì hiện Dialog xác nhận
                                             viewModel.deleteDocumentWithUndo(doc.id)
                                             coroutineScope.launch {
                                                 val result = snackbarHostState.showSnackbar(
                                                     message = "Đã xóa tài liệu",
                                                     actionLabel = "HOÀN TÁC",
-                                                    duration = SnackbarDuration.Short // ~4 giây
+                                                    duration = SnackbarDuration.Short
                                                 )
                                                 if (result == SnackbarResult.ActionPerformed) {
                                                     viewModel.undoDelete(doc.id)
@@ -309,10 +344,10 @@ fun ProfileScreen(
                         .padding(horizontal = 24.dp, vertical = 8.dp)
                         .padding(bottom = 32.dp)
                 ) {
-                    Text("Cài đặt tài khoản", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.Black, modifier = Modifier.padding(bottom = 24.dp))
+                    Text("Cài đặt tài khoản", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E293B), modifier = Modifier.padding(bottom = 24.dp))
 
                     SettingsMenuItem(
-                        icon = Icons.Default.Edit, title = "Chỉnh sửa thông tin", subtitle = "Cập nhật tên, trường học và tiểu sử", iconTint = Color(0xFF4CAF50),
+                        icon = Icons.Default.Edit, title = "Chỉnh sửa thông tin", subtitle = "Cập nhật tên, trường học và tiểu sử", iconTint = Color(0xFF10B981),
                         onClick = { showBottomSheet = false; showEditProfileDialog = true }
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -321,10 +356,10 @@ fun ProfileScreen(
                         onClick = { showBottomSheet = false; showChangePasswordDialog = true }
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    HorizontalDivider(color = Color(0xFFF0F0F0))
+                    HorizontalDivider(color = Color(0xFFF1F5F9))
                     Spacer(modifier = Modifier.height(16.dp))
                     SettingsMenuItem(
-                        icon = Icons.AutoMirrored.Filled.ExitToApp, title = "Đăng xuất", subtitle = "Thoát phiên đăng nhập hiện tại", iconTint = Color.Red, titleColor = Color.Red,
+                        icon = Icons.AutoMirrored.Filled.ExitToApp, title = "Đăng xuất", subtitle = "Thoát phiên đăng nhập hiện tại", iconTint = Color(0xFFEF4444), titleColor = Color(0xFFEF4444),
                         onClick = { showBottomSheet = false; viewModel.logout { onLogoutClick() } }
                     )
                 }
@@ -344,11 +379,15 @@ fun ProfileScreen(
             AlertDialog(
                 onDismissRequest = { showEditProfileDialog = false },
                 containerColor = Color.White,
-                title = { Text("Chỉnh sửa hồ sơ", fontWeight = FontWeight.Bold) },
+                shape = RoundedCornerShape(24.dp),
+                title = { Text("Chỉnh sửa hồ sơ", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = Color(0xFF1E293B)) },
                 text = {
                     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
-                            modifier = Modifier.size(80.dp).background(Color(0xFFE3F2FD), CircleShape).clip(CircleShape)
+                            modifier = Modifier
+                                .size(88.dp)
+                                .background(Color(0xFFF1F5F9), CircleShape)
+                                .clip(CircleShape)
                                 .clickable { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                             contentAlignment = Alignment.Center
                         ) {
@@ -360,15 +399,22 @@ fun ProfileScreen(
                                     modifier = Modifier.fillMaxSize()
                                 )
                             } else {
-                                Text(text = editName.take(1).uppercase(), color = Color(0xFF4C9EEB), fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                                Text(text = editName.take(1).uppercase(), color = Color(0xFF94A3B8), fontSize = 36.sp, fontWeight = FontWeight.Bold)
                             }
-                            Box(modifier = Modifier.align(Alignment.BottomEnd).background(Color.White, CircleShape).padding(4.dp)) {
-                                Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                            // Icon Camera phủ đè
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = (-4).dp, y = (-4).dp)
+                                    .size(28.dp)
+                                    .background(Color(0xFF4C9EEB), CircleShape)
+                                    .border(2.dp, Color.White, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                             }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = "Chạm để thay đổi ảnh", fontSize = 12.sp, color = Color.Gray)
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
 
                         OutlinedTextField(value = editName, onValueChange = { editName = it }, label = { Text("Tên hiển thị") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
                         Spacer(modifier = Modifier.height(12.dp))
@@ -386,17 +432,20 @@ fun ProfileScreen(
                                 onSuccess = { isUpdating = false; showEditProfileDialog = false; Toast.makeText(context, "Đã lưu thông tin!", Toast.LENGTH_SHORT).show() }
                             )
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4C9EEB))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4C9EEB)),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        if (isUpdating) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White) else Text("Lưu", color = Color.White)
+                        if (isUpdating) CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp) else Text("Lưu thay đổi", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 },
-                dismissButton = { TextButton(onClick = { showEditProfileDialog = false }) { Text("Hủy", color = Color.Gray) } }
+                dismissButton = {
+                    TextButton(onClick = { showEditProfileDialog = false }) { Text("Hủy", color = Color.Gray, fontWeight = FontWeight.Bold) }
+                }
             )
         }
 
         // ==========================================
-        // DIALOG: ĐỔI MẬT KHẨU BẢO MẬT (Re-Auth)
+        // DIALOG: ĐỔI MẬT KHẨU BẢO MẬT
         // ==========================================
         if (showChangePasswordDialog) {
             var currentPassword by remember { mutableStateOf("") }
@@ -406,11 +455,12 @@ fun ProfileScreen(
             AlertDialog(
                 onDismissRequest = { showChangePasswordDialog = false },
                 containerColor = Color.White,
-                title = { Text("Đổi mật khẩu", fontWeight = FontWeight.Bold) },
+                shape = RoundedCornerShape(24.dp),
+                title = { Text("Đổi mật khẩu", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = Color(0xFF1E293B)) },
                 text = {
                     Column {
-                        Text("Vì lý do bảo mật, vui lòng nhập mật khẩu hiện tại.", fontSize = 13.sp, color = Color.Gray)
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("Vì lý do bảo mật, vui lòng nhập mật khẩu hiện tại.", fontSize = 14.sp, color = Color(0xFF64748B))
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         OutlinedTextField(
                             value = currentPassword,
@@ -426,7 +476,7 @@ fun ProfileScreen(
                         OutlinedTextField(
                             value = newPassword,
                             onValueChange = { newPassword = it },
-                            label = { Text("Mật khẩu mới (Tối thiểu 6 ký tự)") },
+                            label = { Text("Mật khẩu mới (Từ 6 ký tự)") },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth(),
@@ -453,12 +503,15 @@ fun ProfileScreen(
                             )
                         },
                         enabled = currentPassword.isNotEmpty() && newPassword.length >= 6 && !isProcessing,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4C9EEB))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4C9EEB)),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        if (isProcessing) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White) else Text("Xác nhận", color = Color.White)
+                        if (isProcessing) CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp) else Text("Xác nhận", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 },
-                dismissButton = { TextButton(onClick = { showChangePasswordDialog = false }) { Text("Hủy", color = Color.Gray) } }
+                dismissButton = {
+                    TextButton(onClick = { showChangePasswordDialog = false }) { Text("Hủy", color = Color.Gray, fontWeight = FontWeight.Bold) }
+                }
             )
         }
     }
@@ -468,59 +521,87 @@ fun ProfileScreen(
 // COMPONENT CON
 // ==========================================
 @Composable
-fun SettingsMenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, iconTint: Color, titleColor: Color = Color.Black, onClick: () -> Unit) {
+fun SettingsMenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, iconTint: Color, titleColor: Color = Color(0xFF1E293B), onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onClick() }.padding(vertical = 12.dp, horizontal = 8.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { onClick() }.padding(vertical = 12.dp, horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier.size(48.dp).background(iconTint.copy(alpha = 0.1f), CircleShape), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(52.dp).background(iconTint.copy(alpha = 0.12f), CircleShape), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(24.dp))
         }
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = titleColor)
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(text = subtitle, fontSize = 13.sp, color = Color.Gray)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = subtitle, fontSize = 13.sp, color = Color(0xFF64748B))
         }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.LightGray)
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color(0xFFCBD5E1))
     }
 }
 
 @Composable
 fun ProfileDocumentItem(document: Document, isOwner: Boolean, onClick: () -> Unit, onDeleteClick: () -> Unit) {
+    // [CẬP NHẬT UI]: Card mềm mại, đổ bóng 3D
     Card(
-        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 90.dp).clickable { onClick() },
-        shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 100.dp)
+            .shadow(4.dp, RoundedCornerShape(16.dp), spotColor = Color(0x1A000000))
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
-        Row(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(56.dp).background(Color(0xFFE3F2FD), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                Text(text = document.title.take(1).uppercase(), fontWeight = FontWeight.ExtraBold, color = Color(0xFF4C9EEB), fontSize = 22.sp)
+        Row(modifier = Modifier.fillMaxSize().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Icon tài liệu
+            Box(
+                modifier = Modifier.size(60.dp).background(Color(0xFFF1F5F9), RoundedCornerShape(16.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = document.title.take(1).uppercase(), fontWeight = FontWeight.ExtraBold, color = Color(0xFF4C9EEB), fontSize = 24.sp)
             }
-            Spacer(modifier = Modifier.width(12.dp))
+
+            Spacer(modifier = Modifier.width(16.dp))
+
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = document.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-                    val (statusText, statusColor) = when (document.status) {
-                        "verified" -> "✓ Đã duyệt" to Color(0xFF4CAF50)
-                        "failed" -> "⚠ Lỗi" to Color(0xFFF44336)
-                        else -> "● Đang xử lý" to Color(0xFFFF9800)
+                Text(text = document.title, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = Color(0xFF1E293B), maxLines = 1, overflow = TextOverflow.Ellipsis)
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Trạng thái hiển thị dạng Chip
+                    val (statusText, statusColor, statusBg) = when (document.status) {
+                        "verified" -> Triple("Đã duyệt", Color(0xFF059669), Color(0xFFD1FAE5))
+                        "failed" -> Triple("Lỗi", Color(0xFFDC2626), Color(0xFFFEE2E2))
+                        else -> Triple("Đang xử lý", Color(0xFFD97706), Color(0xFFFEF3C7))
                     }
-                    Text(text = statusText, color = statusColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
+                    Surface(color = statusBg, shape = RoundedCornerShape(6.dp)) {
+                        Text(text = statusText, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                    }
+
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = document.size ?: "N/A", fontSize = 12.sp, color = Color.Gray)
+                    Text(text = document.size ?: "N/A", fontSize = 12.sp, color = Color(0xFF94A3B8), fontWeight = FontWeight.Medium)
                 }
-                Text(text = "Ngày đăng: ${document.uploadDate.take(10)}", fontSize = 12.sp, color = Color.LightGray)
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(text = "Đăng ngày: ${document.uploadDate.take(10)}", fontSize = 12.sp, color = Color(0xFF94A3B8))
             }
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 8.dp)) {
-                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.Gray)
-                Text(text = "${document.downloads}", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(end = 8.dp)) {
+                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFF94A3B8))
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(text = "${document.downloads}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B))
             }
+
             if (isOwner) {
-                IconButton(onClick = onDeleteClick) {
-                    Icon(Icons.Default.Delete, contentDescription = "Xóa", tint = Color(0xFFFFCDD2), modifier = Modifier.size(24.dp))
+                // Nút xóa được thiết kế lại an toàn và đẹp hơn
+                IconButton(
+                    onClick = onDeleteClick,
+                    modifier = Modifier.size(36.dp).background(Color(0xFFFEE2E2), CircleShape)
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = "Xóa", tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
                 }
-            } else {
-                Spacer(modifier = Modifier.width(12.dp))
             }
         }
     }
