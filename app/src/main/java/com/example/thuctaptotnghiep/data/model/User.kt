@@ -8,5 +8,12 @@ data class User(
     @SerializedName("displayName") val displayName: String?,
     @SerializedName("avatarUrl") val avatarUrl: String?,
     @SerializedName("school") val school: String?,
-    @SerializedName("bio") val bio: String?
+    @SerializedName("bio") val bio: String?,
+
+    // ==========================================
+    // [THÊM MỚI] - CÁC TRƯỜNG CHO BẢNG XẾP HẠNG
+    // ==========================================
+    @SerializedName("level") val level: String? = "Tân binh",
+    @SerializedName("totalUploads") val totalUploads: Int = 0,
+    @SerializedName("reputationScore") val reputationScore: Int = 0
 )

@@ -43,7 +43,7 @@ import com.example.thuctaptotnghiep.utils.UserManager
 import com.example.thuctaptotnghiep.utils.toFullUrl
 
 // =========================================================================
-// [MỚI]: EXTENSION TẠO HIỆU ỨNG SHIMMER (LẤP LÁNH CHUYỂN ĐỘNG)
+// EXTENSION TẠO HIỆU ỨNG SHIMMER (LẤP LÁNH CHUYỂN ĐỘNG)
 // =========================================================================
 fun Modifier.shimmerEffect(): Modifier = composed {
     var size by remember { mutableStateOf(IntSize.Zero) }
@@ -82,6 +82,7 @@ fun HomeScreen(
     onNavigateToSeeAll: (String) -> Unit,
     onNotificationClick: () -> Unit,
     onCommunityClick: () -> Unit,
+    onLeaderboardClick: () -> Unit, // [THÊM MỚI]: Hàm xử lý khi bấm nút BXH
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -131,13 +132,12 @@ fun HomeScreen(
                         fallbackName = viewModel.userName,
                         onSearchClick = onSearchClick,
                         onNotificationClick = onNotificationClick,
-                        onCommunityClick = onCommunityClick
+                        onCommunityClick = onCommunityClick,
+                        onLeaderboardClick = onLeaderboardClick // [CẬP NHẬT]
                     )
                 }
 
-                // =======================================================
-                // [CẬP NHẬT TRỌNG TÂM]: THAY THẾ LOADING BẰNG SKELETON
-                // =======================================================
+                // THAY THẾ LOADING BẰNG SKELETON
                 if (isLoading && !isRefreshing) {
                     item { SkeletonDocumentSection() }
                     item { SkeletonDocumentSection() }
@@ -182,7 +182,8 @@ fun HeaderSection(
     fallbackName: String,
     onSearchClick: () -> Unit,
     onNotificationClick: () -> Unit,
-    onCommunityClick: () -> Unit
+    onCommunityClick: () -> Unit,
+    onLeaderboardClick: () -> Unit // [THÊM MỚI]
 ) {
     val displayUserName = userProfile?.displayName?.takeIf { it.isNotBlank() } ?: fallbackName
 
@@ -241,6 +242,17 @@ fun HeaderSection(
                 )
             }
 
+            // ==========================================
+            // [THÊM MỚI]: Nút bấm Bảng Xếp Hạng (Cúp vàng)
+            // ==========================================
+            IconButton(
+                onClick = { onLeaderboardClick() },
+                modifier = Modifier.background(Color.White.copy(alpha = 0.15f), CircleShape)
+            ) {
+                Text(text = "🏆", fontSize = 18.sp)
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+
             IconButton(
                 onClick = { onCommunityClick() },
                 modifier = Modifier.background(Color.White.copy(alpha = 0.15f), CircleShape)
@@ -248,6 +260,7 @@ fun HeaderSection(
                 Icon(Icons.Default.Forum, contentDescription = "Mở cộng đồng", tint = Color.White)
             }
             Spacer(modifier = Modifier.width(8.dp))
+
             IconButton(
                 onClick = { onNotificationClick() },
                 modifier = Modifier.background(Color.White.copy(alpha = 0.15f), CircleShape)
@@ -410,13 +423,13 @@ fun DocumentCardPreview(document: Document, onClick: () -> Unit) {
 }
 
 // =========================================================================
-// [MỚI]: COMPOSABLE UI KHUNG XƯƠNG (SKELETON) CHO DANH SÁCH & CARD
+// COMPOSABLE UI KHUNG XƯƠNG (SKELETON) CHO DANH SÁCH & CARD
 // =========================================================================
 
 @Composable
 fun SkeletonDocumentSection() {
     Column(modifier = Modifier.padding(top = 24.dp)) {
-        // Khung xương tiêu đề danh sách (VD: "Mới được tải lên")
+        // Khung xương tiêu đề danh sách
         Box(
             modifier = Modifier
                 .padding(horizontal = 20.dp)
@@ -428,13 +441,13 @@ fun SkeletonDocumentSection() {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Khung xương danh sách cuộn ngang chứa các thẻ
+        // Khung xương danh sách cuộn ngang
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            userScrollEnabled = false // Vô hiệu hóa cuộn khi đang tải
+            userScrollEnabled = false
         ) {
-            items(3) { // Hiển thị sẵn 3 khung thẻ mờ mờ
+            items(3) {
                 SkeletonDocumentCard()
             }
         }
@@ -455,7 +468,7 @@ fun SkeletonDocumentCard() {
             .width(cardWidth)
             .height(cardHeight)
             .shadow(
-                elevation = 4.dp, // Đổ bóng nhẹ cho khung xương
+                elevation = 4.dp,
                 shape = RoundedCornerShape(16.dp),
                 spotColor = Color(0x1A000000)
             )
@@ -463,7 +476,6 @@ fun SkeletonDocumentCard() {
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Column {
-            // Khung xương vùng chứa ảnh bìa
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -471,7 +483,6 @@ fun SkeletonDocumentCard() {
                     .shimmerEffect()
             )
             Column(modifier = Modifier.padding(14.dp)) {
-                // Khung xương Dòng text tiêu đề 1
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -480,7 +491,6 @@ fun SkeletonDocumentCard() {
                         .shimmerEffect()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                // Khung xương Dòng text tiêu đề 2 (ngắn hơn dòng 1 một chút)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.6f)
@@ -490,7 +500,6 @@ fun SkeletonDocumentCard() {
                 )
                 Spacer(modifier = Modifier.weight(1f))
 
-                // Khung xương cho mục Dung lượng file
                 Box(
                     modifier = Modifier
                         .width(40.dp)

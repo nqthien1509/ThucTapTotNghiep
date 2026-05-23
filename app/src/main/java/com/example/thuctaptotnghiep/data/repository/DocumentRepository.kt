@@ -1,11 +1,13 @@
 package com.example.thuctaptotnghiep.data.repository
 
+import com.example.thuctaptotnghiep.data.model.BaseResponse
 import com.example.thuctaptotnghiep.data.model.Document
 import com.example.thuctaptotnghiep.data.model.UploadResponse
 import com.example.thuctaptotnghiep.data.model.User
 import com.example.thuctaptotnghiep.data.network.ApiService
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import retrofit2.Response
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -58,12 +60,10 @@ class DocumentRepository @Inject constructor(
         apiService.toggleWatchLater(documentId)
     }
 
-    // [MỚI THÊM]: Gọi API tăng lượt xem
     suspend fun incrementView(documentId: String) {
         apiService.incrementView(documentId)
     }
 
-    // [MỚI THÊM]: Gọi API tăng lượt tải
     suspend fun incrementDownload(documentId: String) {
         apiService.incrementDownload(documentId)
     }
@@ -91,6 +91,7 @@ class DocumentRepository @Inject constructor(
     // ==========================================
     // 5. THÔNG TIN NGƯỜI DÙNG (Dành cho ProfileViewModel)
     // ==========================================
+
     suspend fun getUserProfile(uid: String): User {
         return apiService.getUserProfile(uid)
     }
@@ -101,5 +102,19 @@ class DocumentRepository @Inject constructor(
 
     suspend fun uploadAvatar(uid: String, file: MultipartBody.Part): User {
         return apiService.uploadAvatar(uid, file)
+    }
+
+    // ==========================================
+    // [THÊM MỚI] 6. BẢNG XẾP HẠNG (LEADERBOARD)
+    // ==========================================
+
+    // Gọi API lấy Top 10 tài liệu tải nhiều nhất
+    suspend fun getTopDocuments(): Response<BaseResponse<List<Document>>> {
+        return apiService.getTopDocuments()
+    }
+
+    // Gọi API lấy Top 10 người dùng đóng góp nhiều nhất
+    suspend fun getTopContributors(): Response<BaseResponse<List<User>>> {
+        return apiService.getTopContributors()
     }
 }

@@ -22,11 +22,13 @@ import com.example.thuctaptotnghiep.ui.upload.UploadScreen
 import com.example.thuctaptotnghiep.ui.notification.NotificationScreen
 import com.example.thuctaptotnghiep.ui.notification.NotificationViewModel
 import com.example.thuctaptotnghiep.ui.community.CommunityScreen
+import com.example.thuctaptotnghiep.ui.community.RequestDetailScreen // [THÊM MỚI] Import màn hình chi tiết bài viết
 import com.example.thuctaptotnghiep.ui.chat.ChatRoomScreen
 import com.example.thuctaptotnghiep.ui.chat.InboxScreen
 import com.example.thuctaptotnghiep.ui.onboarding.OnboardingScreen
-// [MỚI]: Import màn hình Splash (đảm bảo đúng đường dẫn package của bạn nhé)
 import com.example.thuctaptotnghiep.ui.splash.SplashScreen
+import com.example.thuctaptotnghiep.ui.leaderboard.LeaderboardScreen
+
 import com.google.firebase.auth.FirebaseAuth
 
 @Composable
@@ -40,9 +42,6 @@ fun AppNavigation(initialDocumentId: String? = null) {
         context.getSharedPreferences("app_preferences", Context.MODE_PRIVATE)
     }
 
-    // =======================================================
-    // [CẬP NHẬT TRỌNG TÂM]: THAY ĐỔI MÀN HÌNH KHỞI ĐỘNG MẶC ĐỊNH LÀ SPLASH
-    // =======================================================
     // Màn hình khởi động luôn là Splash
     val startRoute = "splash"
 
@@ -79,9 +78,6 @@ fun AppNavigation(initialDocumentId: String? = null) {
 
     NavHost(navController = navController, startDestination = startRoute) {
 
-        // =======================================================
-        // [MỚI]: ROUTE CHO MÀN HÌNH SPLASH (MÀN HÌNH CHÍNH)
-        // =======================================================
         composable("splash") {
             SplashScreen(
                 onTimeout = {
@@ -144,7 +140,7 @@ fun AppNavigation(initialDocumentId: String? = null) {
                 onProfileClick = { requireAuth { navigateToBottomTab("profile") } },
                 onNotificationClick = { requireAuth { navController.navigate("notifications") { launchSingleTop = true } } },
                 onCommunityClick = { requireAuth { navController.navigate("community") { launchSingleTop = true } } },
-
+                onLeaderboardClick = { navController.navigate("leaderboard") { launchSingleTop = true } },
                 onSearchClick = { navigateToBottomTab("search") },
                 onDocumentClick = { id -> navController.navigate("document_detail/$id") { launchSingleTop = true } },
                 onNavigateToSeeAll = { category -> navController.navigate("search?category=$category") { launchSingleTop = true } }
@@ -227,8 +223,25 @@ fun AppNavigation(initialDocumentId: String? = null) {
             )
         }
 
+        // =======================================================
+        // CÁC MÀN HÌNH TÍNH NĂNG CỘNG ĐỒNG (DIỄN ĐÀN & CHAT)
+        // =======================================================
+
         composable("community") {
             CommunityScreen(navController = navController)
+        }
+
+        // [MỚI]: ROUTE CHO MÀN HÌNH CHI TIẾT BÀI VIẾT (DIỄN ĐÀN)
+        composable(
+            route = "request_detail/{id}",
+            arguments = listOf(navArgument("id") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val requestId = backStackEntry.arguments?.getString("id") ?: ""
+
+            RequestDetailScreen(
+                requestId = requestId,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
         composable("inbox") {
@@ -242,6 +255,15 @@ fun AppNavigation(initialDocumentId: String? = null) {
             val conversationId = backStackEntry.arguments?.getString("conversationId") ?: ""
             val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
             ChatRoomScreen(navController = navController, conversationId = conversationId, currentUserId = currentUserId)
+        }
+
+        composable("leaderboard") {
+            LeaderboardScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToDocumentDetail = { id ->
+                    navController.navigate("document_detail/$id") { launchSingleTop = true }
+                }
+            )
         }
     }
 }

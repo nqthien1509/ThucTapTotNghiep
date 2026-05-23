@@ -22,4 +22,30 @@ class CommunityRepository @Inject constructor(
         )
         return apiService.createRequest(body)
     }
+
+    // Gọi API Upvote hoặc Bỏ upvote một yêu cầu
+    suspend fun upvoteRequest(id: String): Response<BaseResponse<Request>> {
+        return apiService.upvoteRequest(id)
+    }
+
+    // Gọi API đóng yêu cầu bằng cách gửi link tài liệu
+    suspend fun resolveRequest(id: String, resolvedLink: String): Response<BaseResponse<Request>> {
+        val body = mapOf("resolvedLink" to resolvedLink)
+        return apiService.resolveRequest(id, body)
+    }
+
+    // ==========================================
+    // [THÊM MỚI] - CÁC HÀM CHO DIỄN ĐÀN THẢO LUẬN
+    // ==========================================
+
+    // Gọi API lấy chi tiết bài viết và danh sách bình luận
+    suspend fun getRequestById(id: String): Response<BaseResponse<Request>> {
+        return apiService.getRequestById(id)
+    }
+
+    // Gọi API gửi bình luận mới
+    suspend fun addComment(id: String, content: String): Response<BaseResponse<Request>> {
+        val body = mapOf("content" to content)
+        return apiService.addComment(id, body)
+    }
 }

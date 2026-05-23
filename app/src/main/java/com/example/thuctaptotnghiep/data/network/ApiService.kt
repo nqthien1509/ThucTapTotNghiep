@@ -63,6 +63,9 @@ interface ApiService {
     @PUT("api/documents/{id}/download")
     suspend fun incrementDownload(@Path("id") documentId: String)
 
+    @GET("api/documents/leaderboard/top")
+    suspend fun getTopDocuments(): Response<BaseResponse<List<Document>>>
+
     // =======================================================
     // 2. TƯƠNG TÁC (FAVORITE / WATCH LATER)
     // =======================================================
@@ -106,52 +109,70 @@ interface ApiService {
         @Part avatar: MultipartBody.Part
     ): User
 
+    @GET("api/user/leaderboard/top")
+    suspend fun getTopContributors(): Response<BaseResponse<List<User>>>
+
     // =======================================================
     // 5. THÔNG BÁO (NOTIFICATIONS)
     // =======================================================
 
-    // Lấy danh sách thông báo của user (Đã tích hợp phân trang)
     @GET("api/notifications")
     suspend fun getNotifications(
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 20
     ): List<AppNotification>
 
-    // Đánh dấu tất cả thông báo là đã đọc
     @PUT("api/notifications/read-all")
     suspend fun markAllAsRead(): Response<Unit>
 
-    // Đánh dấu MỘT thông báo là đã đọc
     @PUT("api/notifications/{id}/read")
     suspend fun markAsRead(@Path("id") id: String): Unit
 
-    // Xóa MỘT thông báo
     @DELETE("api/notifications/{id}")
     suspend fun deleteNotification(@Path("id") id: String): Unit
 
     // =======================================================
-    // 6. CỘNG ĐỒNG (COMMUNITY / REQUESTS) - [MỚI]
+    // 6. CỘNG ĐỒNG (COMMUNITY / REQUESTS)
     // =======================================================
 
-    // Lấy danh sách bài đăng xin tài liệu
     @GET("api/requests")
     suspend fun getRequests(): Response<BaseResponse<List<Request>>>
-    // Ghi chú: Nếu BE trả về { "success": true, "data": [...] }, bạn cần tạo thêm 1 class BaseResponse<T>(val success: Boolean, val data: T).
-    // Nếu BE trả về trực tiếp mảng [...] thì đổi thành suspend fun getRequests(): List<Request>
 
-    // Tạo bài đăng xin tài liệu mới
     @POST("api/requests")
     suspend fun createRequest(@Body body: Map<String, String>): Response<BaseResponse<Request>>
 
+    @POST("api/requests/{id}/upvote")
+    suspend fun upvoteRequest(@Path("id") id: String): Response<BaseResponse<Request>>
+
+    @POST("api/requests/{id}/resolve")
+    suspend fun resolveRequest(
+        @Path("id") id: String,
+        @Body body: Map<String, String>
+    ): Response<BaseResponse<Request>>
+
     // =======================================================
-    // 7. NHẮN TIN (CHAT) - [MỚI]
+    // [THÊM MỚI] - CÁC API CHO DIỄN ĐÀN THẢO LUẬN
     // =======================================================
 
-    // Gọi khi bấm "Trả lời", BE sẽ kiểm tra nếu đã có phòng chat thì trả về ID cũ, chưa thì tạo phòng mới
+    // Lấy chi tiết một bài viết kèm theo danh sách bình luận
+    @GET("api/requests/{id}")
+    suspend fun getRequestById(@Path("id") id: String): Response<BaseResponse<Request>>
+
+    // Thêm một bình luận mới vào bài viết
+    @POST("api/requests/{id}/comment")
+    suspend fun addComment(
+        @Path("id") id: String,
+        @Body body: Map<String, String> // Truyền vào {"content": "Nội dung bình luận"}
+    ): Response<BaseResponse<Request>>
+
+
+    // =======================================================
+    // 7. NHẮN TIN (CHAT)
+    // =======================================================
+
     @POST("api/chat/conversations")
     suspend fun getOrCreateConversation(@Body body: Map<String, String>): Response<BaseResponse<Conversation>>
 
-    // Lấy lịch sử tin nhắn của một phòng chat cụ thể để load lên giao diện
     @GET("api/chat/messages/{conversationId}")
     suspend fun getMessages(@Path("conversationId") conversationId: String): Response<BaseResponse<List<Message>>>
 
