@@ -1,4 +1,4 @@
-﻿﻿const docRepo = require('../repositories/document.repository');
+﻿const docRepo = require('../repositories/document.repository');
 const docService = require('../services/document.service');
 const { sendToQueue } = require('../services/rabbitmq.service');
 const { notifyDocumentFavorited } = require('../services/notification.service');
@@ -6,7 +6,8 @@ const { validationResult } = require('express-validator');
 const fs = require('fs');
 const path = require('path');
 const { fromPath } = require('pdf2pic'); 
-const Document = require('../models/Document'); // [QUAN TRỌNG]: Phải import model Document để dùng findByIdAndUpdate
+const Document = require('../models/Document');
+const User = require('../models/User'); // [CẬP NHẬT]: Import User để cộng điểm
 
 class DocumentController {
     async upload(req, res, next) {
@@ -57,7 +58,6 @@ class DocumentController {
                 };
 
                 const storeAsImage = fromPath(req.file.path, options);
-                
                 const data = await storeAsImage(1, { responseType: "image" }); 
                 finalThumbnailUrl = `/uploads/thumbnails/${data.name}`;
             } catch (thumbErr) {
@@ -78,6 +78,19 @@ class DocumentController {
                 size: sizeInMB,
                 status: 'pending'
             });
+
+            // ==========================================
+            // [CẬP NHẬT GAMIFICATION]: CỘNG ĐIỂM CHO USER
+            // Tăng totalUploads lên 1 và cộng 10 điểm uy tín
+            // ==========================================
+            try {
+                await User.findByIdAndUpdate(req.user.uid, {
+                    $inc: { totalUploads: 1, reputationScore: 10 }
+                });
+            } catch (userErr) {
+                req.log.error({ err: userErr, uid: req.user.uid }, 'Loi khi cong diem cho user');
+            }
+            // ==========================================
 
             await sendToQueue({
                 documentId: createdDoc._id,
@@ -101,6 +114,10 @@ class DocumentController {
             if (createdDoc && createdDoc._id) {
                 try {
                     await docRepo.deleteById(createdDoc._id);
+                    // Rút lại điểm nếu upload thất bại sau khi đã tạo doc
+                    await User.findByIdAndUpdate(req.user.uid, {
+                        $inc: { totalUploads: -1, reputationScore: -10 }
+                    });
                 } catch (rollbackError) {
                     req.log.error({ err: rollbackError, documentId: createdDoc._id }, 'Rollback document that bai');
                 }
@@ -215,6 +232,16 @@ class DocumentController {
     async delete(req, res, next) {
         try {
             await docService.deleteDocument(req.params.id, req.user.uid);
+            
+            // [CẬP NHẬT GAMIFICATION]: TRỪ ĐIỂM KHI XÓA TÀI LIỆU
+            try {
+                await User.findByIdAndUpdate(req.user.uid, {
+                    $inc: { totalUploads: -1, reputationScore: -10 }
+                });
+            } catch (userErr) {
+                req.log.error({ err: userErr }, 'Loi khi tru diem user do xoa tai lieu');
+            }
+
             req.log.info({ docId: req.params.id }, 'Xoa tai lieu thanh cong');
             res.status(200).json({ message: 'Xoa thanh cong!' });
         } catch (error) {
@@ -224,16 +251,13 @@ class DocumentController {
         }
     }
 
-    // ============================================================
-    // [ĐÃ SỬA]: ĐƯA 2 HÀM NÀY VÀO TRONG CLASS
-    // ============================================================
     async incrementView(req, res, next) {
         try {
             const { id } = req.params;
             await Document.findByIdAndUpdate(id, { $inc: { views: 1 } });
             res.status(200).json({ success: true, message: "Đã tăng lượt xem" });
         } catch (error) {
-            next(error); // Dùng next(error) để đồng bộ với hàm xử lý lỗi tổng của bạn
+            next(error); 
         }
     }
 
@@ -242,6 +266,40 @@ class DocumentController {
             const { id } = req.params;
             await Document.findByIdAndUpdate(id, { $inc: { downloads: 1 } });
             res.status(200).json({ success: true, message: "Đã tăng lượt tải" });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    // ============================================================
+    // [CẬP NHẬT LẠI]: API LẤY BẢNG XẾP HẠNG TÀI LIỆU
+    // Fix lỗi MongoDB sort sai các dữ liệu cũ bị thiếu trường views/downloads
+    // ============================================================
+    async getTopDocuments(req, res, next) {
+        try {
+            // Lấy tất cả tài liệu đã duyệt
+            const allDocs = await Document.find({ status: 'verified' });
+            
+            // Dùng Javascript sort để ép toàn bộ dữ liệu null/lỗi về 0 tính toán cho chuẩn
+            const sortedDocs = allDocs.sort((a, b) => {
+                const downA = a.downloads || 0;
+                const downB = b.downloads || 0;
+                
+                // Ưu tiên 1: Lượt tải giảm dần
+                if (downB !== downA) {
+                    return downB - downA; 
+                }
+                
+                // Ưu tiên 2: Nếu lượt tải bằng nhau -> Lượt xem giảm dần
+                const viewA = a.views || 0;
+                const viewB = b.views || 0;
+                return viewB - viewA; 
+            });
+
+            // Cắt lấy đúng 10 tài liệu top đầu
+            const top10 = sortedDocs.slice(0, 10);
+            
+            res.status(200).json({ success: true, data: top10 });
         } catch (error) {
             next(error);
         }

@@ -1,10 +1,11 @@
 const mongoose = require('mongoose');
 
-const documentSchema = new mongoose.Schema({
-    // CẬP NHẬT QUAN TRỌNG: Thêm userId để lưu danh tính người đăng
-    // Đánh index: true để tối ưu tốc độ load màn hình "Tài liệu của tôi"
+const documentSchema = new mongoose.Schema(
+  {
+    // Thông tin người đăng
     userId: { type: String, required: true, index: true }, 
 
+    // Thông tin cơ bản của tài liệu
     title: { type: String, required: true, trim: true },
     authorName: { type: String, required: true, trim: true },
     subject: { type: String, required: true }, 
@@ -16,20 +17,39 @@ const documentSchema = new mongoose.Schema({
     description: { type: String, trim: true }, 
     tags: { type: [String], default: [] }, 
     
+    // Nơi lưu trữ file
     fileUrl: { type: String, required: true },
-    
-    // [CẬP NHẬT TRỌNG TÂM]: Thêm trường lưu đường dẫn ảnh xem trước (trang 1 của PDF)
     thumbnailUrl: { type: String, default: null }, 
+    size: { type: String }, 
     
-    size: { type: String }, // Nơi chứa dữ liệu dung lượng (VD: "17.50 MB")
-    uploadDate: { type: Date, default: Date.now },
+    // Trạng thái (Kiểm duyệt)
     status: { type: String, default: 'pending', enum: ['pending', 'verified', 'failed'] },
     
-    // Mảng lưu danh sách UID của những người đã thả tim/xem sau
+    // ==========================================
+    // [CẬP NHẬT TRỌNG TÂM CHO BẢNG XẾP HẠNG]
+    // ==========================================
+    
+    // Đánh index: true để API lấy bảng xếp hạng chạy siêu tốc
+    views: { type: Number, default: 0, index: true },
+    downloads: { type: Number, default: 0, index: true },
+    
+    // [THÊM MỚI] - Chuẩn bị cho chức năng Đánh giá (Rating 1-5 sao)
+    averageRating: { type: Number, default: 0 },
+    totalRatings: { type: Number, default: 0 },
+    
+    // ==========================================
+    
+    // Mảng lưu danh sách UID của những người đã tương tác
     favoritedBy: { type: [String], default: [], index: true },
     watchLaterBy: { type: [String], default: [], index: true },
-    views: { type: Number, default: 0 },
-    downloads: { type: Number, default: 0 },
-});
+    
+    // (Vẫn giữ uploadDate để tương thích với code cũ của bạn nếu có)
+    uploadDate: { type: Date, default: Date.now },
+  },
+  {
+    // Tự động sinh ra createdAt và updatedAt
+    timestamps: true,
+  }
+);
 
 module.exports = mongoose.model('Document', documentSchema);

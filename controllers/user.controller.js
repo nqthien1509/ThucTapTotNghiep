@@ -1,8 +1,9 @@
 // controllers/user.controller.js
 const userService = require('../services/user.service');
+const User = require('../models/User'); // [CẬP NHẬT]: Import thêm User model để truy vấn Bảng xếp hạng
 
 class UserController {
-    // Lấy thông tin cá nhân
+    // 1. Lấy thông tin cá nhân
     async getProfile(req, res, next) {
         try {
             const uid = req.params.uid;
@@ -21,21 +22,24 @@ class UserController {
         } catch (error) {
             if (error.message === 'USER_NOT_FOUND') {
                 // Nếu là tài khoản mới tinh (có trên Firebase nhưng chưa có trong MongoDB)
-                // Trả về một object mặc định để App Android không bị crash
+                // [CẬP NHẬT]: Bổ sung thêm các trường điểm số mặc định
                 return res.status(200).json({ 
                     _id: req.params.uid, 
                     email: "", 
                     displayName: "", 
-                    school: "Trường Đại học Giao thông vận tải TP.HCM (UTH)", 
+                    school: "Trường Đại học Giao thông Vận tải TP.HCM (UTH)", 
                     bio: "", 
-                    avatarUrl: "" 
+                    avatarUrl: "",
+                    totalUploads: 0,
+                    reputationScore: 0,
+                    level: "Tân binh"
                 });
             }
             next(error); // Đẩy lỗi hệ thống ra ngoài cho Global Error Handler
         }
     }
 
-    // Cập nhật thông tin chữ (Tên, Trường, Bio)
+    // 2. Cập nhật thông tin chữ (Tên, Trường, Bio)
     async updateProfile(req, res, next) {
         try {
             const uid = req.params.uid;
@@ -48,9 +52,13 @@ class UserController {
 
             const updateData = req.body;
             
-            // Xử lý bảo mật: Chặn không cho user tự sửa các trường nhạy cảm (VD: điểm số, role)
+            // Xử lý bảo mật: Chặn không cho user tự sửa các trường nhạy cảm 
+            // Ngăn chặn người dùng dùng API tự hack điểm của mình lên top
             delete updateData.points; 
             delete updateData.role;
+            delete updateData.totalUploads;
+            delete updateData.reputationScore;
+            delete updateData.level;
 
             const user = await userService.updateUserProfile(uid, updateData);
             
@@ -61,7 +69,7 @@ class UserController {
         }
     }
 
-    // Cập nhật Ảnh đại diện
+    // 3. Cập nhật Ảnh đại diện
     async updateAvatar(req, res, next) {
         try {
             const uid = req.params.uid;
@@ -84,6 +92,25 @@ class UserController {
             req.log.info({ userId: uid }, 'Cập nhật ảnh đại diện thành công');
             res.status(200).json(updatedUser);
         } catch (error) {
+            next(error);
+        }
+    }
+
+    // ============================================================
+    // [THÊM MỚI]: API LẤY BẢNG XẾP HẠNG NGƯỜI DÙNG ĐÓNG GÓP
+    // ============================================================
+    async getTopContributors(req, res, next) {
+        try {
+            // Lấy Top 10 người dùng sắp xếp theo số lượng Upload (giảm dần) 
+            // Nếu bằng số upload thì xếp theo điểm uy tín (giảm dần)
+            const topUsers = await User.find({})
+                .sort({ totalUploads: -1, reputationScore: -1 })
+                .limit(10)
+                .select('displayName avatarUrl school totalUploads reputationScore level'); // Chỉ lấy dữ liệu cần thiết để bảo mật email
+
+            res.status(200).json({ success: true, data: topUsers });
+        } catch (error) {
+            req.log.error({ err: error }, 'Lỗi khi lấy bảng xếp hạng người dùng');
             next(error);
         }
     }

@@ -16,6 +16,13 @@ router.get('/documents', docController.getAll);
 router.get('/search', docController.search);
 router.get('/my-documents', verifyToken, docController.getMyDocuments);
 
+// ============================================================
+// [ĐÃ FIX LỖI]: THÊM API LẤY BẢNG XẾP HẠNG TÀI LIỆU
+// (Bắt buộc phải nằm TRƯỚC router.get('/documents/:id') )
+// ============================================================
+router.get('/documents/leaderboard/top', docController.getTopDocuments);
+
+
 // --- CHI TIẾT & TƯƠNG TÁC TÀI LIỆU ---
 router.get('/documents/:id', optionalVerifyToken, docController.getDetail);
 router.delete('/documents/:id', verifyToken, docController.delete);

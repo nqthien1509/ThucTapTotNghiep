@@ -9,6 +9,16 @@ const { uploadImage } = require('../middlewares/upload.middleware'); // Kéo mid
 // Base URL: /api/user
 // ==========================================
 
+// =========================================================================
+// [THÊM MỚI] - CÁC TÍNH NĂNG NÂNG CẤP (BẢNG XẾP HẠNG)
+// LƯU Ý: Phải đặt TRƯỚC route '/:uid' để tránh lỗi Express nhận nhầm param
+// =========================================================================
+// 4. Lấy bảng xếp hạng Top 10 người dùng đóng góp nhiều nhất
+// Endpoint: GET /api/user/leaderboard/top
+router.get('/leaderboard/top', verifyToken, userController.getTopContributors);
+// =========================================================================
+
+
 // 1. Lấy thông tin cá nhân của User
 router.get('/:uid', verifyToken, userController.getProfile);
 
