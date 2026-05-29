@@ -22,7 +22,7 @@ import com.example.thuctaptotnghiep.ui.upload.UploadScreen
 import com.example.thuctaptotnghiep.ui.notification.NotificationScreen
 import com.example.thuctaptotnghiep.ui.notification.NotificationViewModel
 import com.example.thuctaptotnghiep.ui.community.CommunityScreen
-import com.example.thuctaptotnghiep.ui.community.RequestDetailScreen // [THÊM MỚI] Import màn hình chi tiết bài viết
+import com.example.thuctaptotnghiep.ui.community.RequestDetailScreen
 import com.example.thuctaptotnghiep.ui.chat.ChatRoomScreen
 import com.example.thuctaptotnghiep.ui.chat.InboxScreen
 import com.example.thuctaptotnghiep.ui.onboarding.OnboardingScreen
@@ -37,12 +37,10 @@ fun AppNavigation(initialDocumentId: String? = null) {
     val currentUser = FirebaseAuth.getInstance().currentUser
     val context = LocalContext.current
 
-    // Khởi tạo SharedPreferences để lưu trạng thái Onboarding
     val sharedPreferences = remember {
         context.getSharedPreferences("app_preferences", Context.MODE_PRIVATE)
     }
 
-    // Màn hình khởi động luôn là Splash
     val startRoute = "splash"
 
     LaunchedEffect(initialDocumentId) {
@@ -58,9 +56,9 @@ fun AppNavigation(initialDocumentId: String? = null) {
     // =======================================================
     val requireAuth = { action: () -> Unit ->
         if (FirebaseAuth.getInstance().currentUser != null) {
-            action() // Đã đăng nhập -> Cho phép thao tác
+            action()
         } else {
-            navController.navigate("login") { // Chưa đăng nhập -> Đi tới Login
+            navController.navigate("login") {
                 launchSingleTop = true
             }
         }
@@ -81,10 +79,7 @@ fun AppNavigation(initialDocumentId: String? = null) {
         composable("splash") {
             SplashScreen(
                 onTimeout = {
-                    // 1. Kiểm tra trạng thái Onboarding
                     val isOnboardingCompleted = sharedPreferences.getBoolean("is_onboarding_completed", false)
-
-                    // 2. Chuyển hướng dựa trên trạng thái và xóa màn Splash khỏi backstack
                     if (isOnboardingCompleted) {
                         navController.navigate("home") {
                             popUpTo("splash") { inclusive = true }
@@ -101,10 +96,7 @@ fun AppNavigation(initialDocumentId: String? = null) {
         composable("onboarding") {
             OnboardingScreen(
                 onFinishOnboarding = {
-                    // Lưu cờ đánh dấu đã hoàn thành Onboarding vĩnh viễn
                     sharedPreferences.edit().putBoolean("is_onboarding_completed", true).apply()
-
-                    // Chuyển sang Home và xóa Onboarding khỏi ngăn xếp (Không back lại được)
                     navController.navigate("home") {
                         popUpTo("onboarding") { inclusive = true }
                     }
@@ -112,10 +104,24 @@ fun AppNavigation(initialDocumentId: String? = null) {
             )
         }
 
+        // =======================================================
+        // [CẢI TIẾN] LUỒNG ĐĂNG NHẬP / ĐĂNG KÝ
+        // =======================================================
         composable("login") {
             LoginScreen(
                 onLoginSuccess = {
-                    navController.popBackStack()
+                    // Kiểm tra xem phía sau Login có màn hình nào không
+                    val previousRoute = navController.previousBackStackEntry?.destination?.route
+
+                    if (previousRoute != null && previousRoute != "splash") {
+                        // Nếu là Khách (Guest) đang lướt app rồi bấm vào tính năng yêu cầu đăng nhập -> Lùi lại đúng màn hình đó
+                        navController.popBackStack()
+                    } else {
+                        // Nếu vừa Đăng xuất xong hoặc mở app -> Xóa trắng lịch sử và đẩy thẳng vào Home
+                        navController.navigate("home") {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
                 },
                 onNavigateToRegister = {
                     navController.navigate("register") { launchSingleTop = true }
@@ -126,8 +132,9 @@ fun AppNavigation(initialDocumentId: String? = null) {
         composable("register") {
             RegisterScreen(
                 onRegisterSuccess = {
+                    // Đăng ký thành công -> Xóa trắng ngăn xếp và vào Home
                     navController.navigate("home") {
-                        popUpTo(navController.graph.id) { inclusive = true }
+                        popUpTo(0) { inclusive = true }
                     }
                 },
                 onNavigateToLogin = { navController.popBackStack() }
@@ -180,13 +187,17 @@ fun AppNavigation(initialDocumentId: String? = null) {
             )
         }
 
+        // =======================================================
+        // [CẢI TIẾN] LUỒNG ĐĂNG XUẤT (LOGOUT)
+        // =======================================================
         composable("profile") {
             ProfileScreen(
                 onBackClick = { navigateToBottomTab("home") },
                 onLogoutClick = {
                     FirebaseAuth.getInstance().signOut()
+                    // Khi Đăng xuất: Về trang Login và dùng popUpTo(0) để CẮT ĐỨT mọi lịch sử phía sau
                     navController.navigate("login") {
-                        popUpTo(navController.graph.id) { inclusive = true }
+                        popUpTo(0) { inclusive = true }
                     }
                 },
                 onSearchClick = { navigateToBottomTab("search") },
@@ -223,15 +234,10 @@ fun AppNavigation(initialDocumentId: String? = null) {
             )
         }
 
-        // =======================================================
-        // CÁC MÀN HÌNH TÍNH NĂNG CỘNG ĐỒNG (DIỄN ĐÀN & CHAT)
-        // =======================================================
-
         composable("community") {
             CommunityScreen(navController = navController)
         }
 
-        // [MỚI]: ROUTE CHO MÀN HÌNH CHI TIẾT BÀI VIẾT (DIỄN ĐÀN)
         composable(
             route = "request_detail/{id}",
             arguments = listOf(navArgument("id") { type = NavType.StringType })

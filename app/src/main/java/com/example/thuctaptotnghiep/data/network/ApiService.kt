@@ -151,7 +151,7 @@ interface ApiService {
     ): Response<BaseResponse<Request>>
 
     // =======================================================
-    // [THÊM MỚI] - CÁC API CHO DIỄN ĐÀN THẢO LUẬN
+    // CÁC API CHO DIỄN ĐÀN THẢO LUẬN
     // =======================================================
 
     // Lấy chi tiết một bài viết kèm theo danh sách bình luận
@@ -165,7 +165,6 @@ interface ApiService {
         @Body body: Map<String, String> // Truyền vào {"content": "Nội dung bình luận"}
     ): Response<BaseResponse<Request>>
 
-
     // =======================================================
     // 7. NHẮN TIN (CHAT)
     // =======================================================
@@ -178,4 +177,13 @@ interface ApiService {
 
     @GET("api/chat/conversations/me")
     suspend fun getMyConversations(): Response<BaseResponse<List<Conversation>>>
+
+    // =======================================================
+    // 8. BÁO CÁO VI PHẠM (REPORT)
+    // =======================================================
+
+    @POST("api/reports")
+    suspend fun createReport(
+        @Body body: Map<String, String>
+    ): Response<BaseResponse<Any>> // Dùng Any vì ta chỉ cần lấy success và message từ server
 }

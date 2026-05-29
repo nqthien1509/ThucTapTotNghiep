@@ -105,7 +105,7 @@ class DocumentRepository @Inject constructor(
     }
 
     // ==========================================
-    // [THÊM MỚI] 6. BẢNG XẾP HẠNG (LEADERBOARD)
+    // 6. BẢNG XẾP HẠNG (LEADERBOARD)
     // ==========================================
 
     // Gọi API lấy Top 10 tài liệu tải nhiều nhất
@@ -116,5 +116,25 @@ class DocumentRepository @Inject constructor(
     // Gọi API lấy Top 10 người dùng đóng góp nhiều nhất
     suspend fun getTopContributors(): Response<BaseResponse<List<User>>> {
         return apiService.getTopContributors()
+    }
+
+    // ==========================================
+    // [THÊM MỚI] 7. BÁO CÁO (REPORT)
+    // ==========================================
+
+    // Gọi API gửi báo cáo tài liệu vi phạm / sai nội dung / rác
+    suspend fun createReport(
+        type: String,
+        targetId: String,
+        reason: String,
+        evidenceLink: String
+    ): Response<BaseResponse<Any>> {
+        val body = mapOf(
+            "type" to type,
+            "targetId" to targetId,
+            "reason" to reason,
+            "evidenceLink" to evidenceLink
+        )
+        return apiService.createReport(body)
     }
 }

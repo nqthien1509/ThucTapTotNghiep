@@ -51,7 +51,7 @@ fun DocumentDetailScreen(
     onUploadClick: () -> Unit,
     onProfileClick: () -> Unit,
     onSearchClick: () -> Unit,
-    onRequireLogin: () -> Unit, // [THÊM]: Bắt buộc đăng nhập
+    onRequireLogin: () -> Unit,
     viewModel: DocumentDetailViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -64,7 +64,13 @@ fun DocumentDetailScreen(
 
     var isPreviewOpen by remember { mutableStateOf(false) }
 
-    // [MỚI]: Biến & Hàm kiểm tra đăng nhập tại chỗ
+    // ==========================================
+    // STATE CHO TÍNH NĂNG BÁO CÁO (REPORT)
+    // ==========================================
+    var showReportDialog by remember { mutableStateOf(false) }
+    var reportReason by remember { mutableStateOf("") }
+
+    // Biến & Hàm kiểm tra đăng nhập tại chỗ
     val isLoggedIn = FirebaseAuth.getInstance().currentUser != null
     val performAuthAction = { action: () -> Unit ->
         if (isLoggedIn) action() else onRequireLogin()
@@ -186,19 +192,26 @@ fun DocumentDetailScreen(
                                 )
 
                                 Row {
+                                    // Nút Lưu Xem Sau
                                     ActionIconButton(
                                         icon = if (isWatchLater) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                                         activeColor = Color(0xFF4C9EEB),
                                         isActive = isWatchLater,
-                                        // [SỬA]: Yêu cầu đăng nhập
                                         onClick = { performAuthAction { viewModel.toggleWatchLater(doc.id) } }
                                     )
+                                    // Nút Yêu Thích
                                     ActionIconButton(
                                         icon = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                         activeColor = Color.Red,
                                         isActive = isFavorite,
-                                        // [SỬA]: Yêu cầu đăng nhập
                                         onClick = { performAuthAction { viewModel.toggleFavorite(doc.id) } }
+                                    )
+                                    // [THÊM MỚI] Nút Báo Cáo
+                                    ActionIconButton(
+                                        icon = Icons.Rounded.Warning,
+                                        activeColor = Color.Transparent,
+                                        isActive = false, // Không đổi màu khi click như toggle
+                                        onClick = { performAuthAction { showReportDialog = true } }
                                     )
                                 }
                             }
@@ -278,7 +291,6 @@ fun DocumentDetailScreen(
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 Button(
                                     onClick = {
-                                        // [SỬA TẠI ĐÂY]: Yêu cầu đăng nhập mới được xem trước
                                         performAuthAction {
                                             viewModel.incrementViewCount(doc.id)
                                             isPreviewOpen = true
@@ -296,7 +308,6 @@ fun DocumentDetailScreen(
 
                                 Button(
                                     onClick = {
-                                        // [SỬA TẠI ĐÂY]: Yêu cầu đăng nhập mới được Tải về
                                         performAuthAction {
                                             val safeFileName = viewModel.getSafeFileName(doc.title)
                                             downloadDocument(context, doc.fileUrl, safeFileName)
@@ -315,6 +326,66 @@ fun DocumentDetailScreen(
                             }
                             Spacer(modifier = Modifier.height(40.dp))
                         }
+                    }
+
+                    // ==========================================
+                    // GIAO DIỆN DIALOG BÁO CÁO TÀI LIỆU
+                    // ==========================================
+                    if (showReportDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showReportDialog = false; reportReason = "" },
+                            title = { Text("Báo cáo tài liệu", fontWeight = FontWeight.Bold) },
+                            text = {
+                                Column {
+                                    Text(
+                                        "Bạn đang báo cáo tài liệu: ${doc.title}. Vui lòng cho biết lý do (ví dụ: nội dung sai lệch, vi phạm bản quyền, spam...):",
+                                        fontSize = 14.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    OutlinedTextField(
+                                        value = reportReason,
+                                        onValueChange = { reportReason = it },
+                                        placeholder = { Text("Nhập lý do báo cáo...") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        maxLines = 4,
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = Color(0xFFEF4444)
+                                        )
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        if (reportReason.isNotBlank()) {
+                                            viewModel.reportDocument(
+                                                targetId = doc.id,
+                                                reason = reportReason,
+                                                evidenceLink = doc.id, // Dùng ID làm bằng chứng luôn
+                                                onSuccess = { msg ->
+                                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                                    showReportDialog = false
+                                                    reportReason = ""
+                                                },
+                                                onError = { err ->
+                                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                                }
+                                            )
+                                        } else {
+                                            Toast.makeText(context, "Vui lòng nhập lý do!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                                ) {
+                                    Text("Gửi báo cáo")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showReportDialog = false; reportReason = "" }) {
+                                    Text("Hủy", color = Color.Gray)
+                                }
+                            }
+                        )
                     }
                 } else {
                     Text("Không tìm thấy dữ liệu", modifier = Modifier.align(Alignment.Center))
@@ -347,7 +418,6 @@ fun ModernStatItem(modifier: Modifier, label: String, value: String, icon: Image
 }
 
 fun downloadDocument(context: Context, fileUrl: String, safeFileName: String) {
-    // ... Giữ nguyên hàm ...
     try {
         val fullUrl = fileUrl.toFullUrl()
         val request = DownloadManager.Request(Uri.parse(fullUrl))

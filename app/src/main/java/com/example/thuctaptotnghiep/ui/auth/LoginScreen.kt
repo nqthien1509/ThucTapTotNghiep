@@ -46,10 +46,13 @@ fun LoginScreen(
 
     val isLoading by viewModel.isLoading.collectAsState()
     val authMessage by viewModel.authMessage.collectAsState()
-    val isAuthSuccess by viewModel.isAuthSuccess.collectAsState()
+    // ĐÃ XÓA DÒNG: val isAuthSuccess by viewModel.isAuthSuccess.collectAsState()
 
-    LaunchedEffect(isAuthSuccess) {
-        if (isAuthSuccess) onLoginSuccess()
+    // [CẬP NHẬT LUỒNG LẮNG NGHE LỖI]: Bắt sự kiện chuyển trang 1 lần duy nhất
+    LaunchedEffect(Unit) {
+        viewModel.authSuccessEvent.collect {
+            onLoginSuccess()
+        }
     }
 
     LaunchedEffect(authMessage) {
@@ -59,7 +62,13 @@ fun LoginScreen(
         }
     }
 
-    // [CẬP NHẬT UI]: Nền Gradient toàn màn hình
+    LaunchedEffect(authMessage) {
+        authMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.resetMessage()
+        }
+    }
+
     val backgroundGradient = Brush.verticalGradient(
         colors = listOf(Color(0xFF4C9EEB), Color(0xFF1E88E5))
     )
@@ -75,7 +84,6 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center
     ) {
 
-        // Phần Header Logo/Chào mừng
         Spacer(modifier = Modifier.height(24.dp))
         Box(
             modifier = Modifier
@@ -100,7 +108,6 @@ fun LoginScreen(
         )
         Spacer(modifier = Modifier.height(40.dp))
 
-        // Card Form Đăng Nhập
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.9f)
@@ -112,7 +119,6 @@ fun LoginScreen(
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // [CẬP NHẬT UI]: Ô nhập liệu màu xám nhạt, không viền
                 val textFieldColors = TextFieldDefaults.colors(
                     focusedContainerColor = Color(0xFFF1F5F9),
                     unfocusedContainerColor = Color(0xFFF1F5F9),
@@ -156,7 +162,6 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Nút Quên mật khẩu (Tương lai có thể thêm chức năng)
                 Text(
                     text = "Quên mật khẩu?",
                     color = Color(0xFF4C9EEB),

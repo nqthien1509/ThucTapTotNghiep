@@ -70,19 +70,17 @@ class DocumentDetailViewModel @Inject constructor(
     }
 
     // =======================================================
-    // [CẬP NHẬT MỚI]: TĂNG LƯỢT XEM VÀ TẢI (OPTIMISTIC UI)
+    // TĂNG LƯỢT XEM VÀ TẢI (OPTIMISTIC UI)
     // =======================================================
     fun incrementViewCount(documentId: String) {
         viewModelScope.launch {
             try {
                 // 1. Cập nhật UI ngay lập tức: Cộng thêm 1 vào views hiện tại
                 _document.value = _document.value?.let { currentDoc ->
-                    // Giả sử views là Int. Nếu null thì mặc định 0 rồi cộng 1
                     currentDoc.copy(views = (currentDoc.views ?: 0) + 1)
                 }
 
                 // 2. Gọi API để Backend lưu vào Database
-                // LƯU Ý: Bạn cần đảm bảo đã tạo hàm incrementView trong DocumentRepository nhé!
                 repository.incrementView(documentId)
             } catch (e: Exception) {
                 e.printStackTrace() // Lỗi đếm view thì chỉ in log, không cần gián đoạn người dùng
@@ -99,7 +97,6 @@ class DocumentDetailViewModel @Inject constructor(
                 }
 
                 // 2. Gọi API để Backend lưu vào Database
-                // LƯU Ý: Bạn cần đảm bảo đã tạo hàm incrementDownload trong DocumentRepository!
                 repository.incrementDownload(documentId)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -145,6 +142,34 @@ class DocumentDetailViewModel @Inject constructor(
                 _errorMessage.value = "Lỗi khi cập nhật xem sau: ${e.message}"
             } finally {
                 _isTogglingAction.value = false
+            }
+        }
+    }
+
+    // =======================================================
+    // [THÊM MỚI]: BÁO CÁO TÀI LIỆU VI PHẠM (REPORT DOCUMENT)
+    // =======================================================
+    fun reportDocument(
+        targetId: String,
+        reason: String,
+        evidenceLink: String,
+        onSuccess: (String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                // Truyền type = "document" cho hệ thống xử lý phân loại của backend
+                val response = repository.createReport("document", targetId, reason, evidenceLink)
+                if (response.isSuccessful && response.body()?.success == true) {
+                    onSuccess(response.body()?.message ?: "Gửi báo cáo tài liệu vi phạm thành công!")
+                } else {
+                    onError(response.body()?.message ?: "Không thể gửi báo cáo tài liệu")
+                }
+            } catch (e: Exception) {
+                onError("Lỗi kết nối mạng: ${e.message}")
+            } finally {
+                _isLoading.value = false
             }
         }
     }

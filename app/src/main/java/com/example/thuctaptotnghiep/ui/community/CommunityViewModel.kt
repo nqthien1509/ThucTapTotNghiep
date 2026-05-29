@@ -23,7 +23,7 @@ class CommunityViewModel @Inject constructor(
     val requests: StateFlow<List<Request>> = _requests.asStateFlow()
 
     // =============================================================
-    // [THÊM MỚI]: LƯU TRỮ TRẠNG THÁI CHI TIẾT CỦA BÀI VIẾT (DIỄN ĐÀN)
+    // LƯU TRỮ TRẠNG THÁI CHI TIẾT CỦA BÀI VIẾT (DIỄN ĐÀN)
     // =============================================================
     private val _selectedRequest = MutableStateFlow<Request?>(null)
     val selectedRequest: StateFlow<Request?> = _selectedRequest.asStateFlow()
@@ -82,7 +82,7 @@ class CommunityViewModel @Inject constructor(
     }
 
     // =============================================================
-    // [THÊM MỚI]: CÁC HÀM XỬ LÝ DIỄN ĐÀN THẢO LUẬN
+    // CÁC HÀM XỬ LÝ DIỄN ĐÀN THẢO LUẬN
     // =============================================================
 
     // 3. Lấy chi tiết một bài viết (Bao gồm danh sách bình luận)
@@ -160,6 +160,34 @@ class CommunityViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _error.value = "Lỗi kết nối mạng: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    // =============================================================
+    // [THÊM MỚI]: BÁO CÁO NGƯỜI DÙNG VI PHẠM
+    // =============================================================
+    fun reportUser(
+        targetId: String,
+        reason: String,
+        evidenceLink: String,
+        onSuccess: (String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                // Truyền type = "user" để báo cáo người dùng
+                val response = repository.createReport("user", targetId, reason, evidenceLink)
+                if (response.isSuccessful && response.body()?.success == true) {
+                    onSuccess(response.body()?.message ?: "Đã gửi báo cáo vi phạm!")
+                } else {
+                    onError(response.body()?.message ?: "Không thể gửi báo cáo")
+                }
+            } catch (e: Exception) {
+                onError("Lỗi kết nối mạng: ${e.message}")
             } finally {
                 _isLoading.value = false
             }

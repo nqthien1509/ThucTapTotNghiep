@@ -1,5 +1,6 @@
 package com.example.thuctaptotnghiep.ui.community
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,12 +13,14 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ThumbUp
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,8 +41,15 @@ fun RequestDetailScreen(
     val request by viewModel.selectedRequest.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+    val context = LocalContext.current
 
     var commentText by remember { mutableStateOf("") }
+
+    // ==========================================
+    // STATE CHO TÍNH NĂNG BÁO CÁO (REPORT)
+    // ==========================================
+    var commentToReport by remember { mutableStateOf<Comment?>(null) }
+    var reportReason by remember { mutableStateOf("") }
 
     // Gọi API lấy chi tiết bài viết ngay khi vào màn hình
     LaunchedEffect(requestId) {
@@ -114,10 +124,75 @@ fun RequestDetailScreen(
 
                 // 3. Danh sách các bình luận
                 items(req.comments) { comment ->
-                    CommentItem(comment = comment)
+                    CommentItem(
+                        comment = comment,
+                        currentUserId = currentUserId,
+                        onReportClick = { commentToReport = comment }
+                    )
                 }
             }
         }
+    }
+
+    // ==========================================
+    // DIALOG NHẬP LÝ DO BÁO CÁO VI PHẠM
+    // ==========================================
+    if (commentToReport != null) {
+        AlertDialog(
+            onDismissRequest = { commentToReport = null; reportReason = "" },
+            title = { Text("Báo cáo vi phạm", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        "Bạn đang báo cáo người dùng ${commentToReport?.user?.displayName ?: "Ẩn danh"}. Vui lòng cho biết lý do:",
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = reportReason,
+                        onValueChange = { reportReason = it },
+                        placeholder = { Text("Ví dụ: Sử dụng ngôn từ khiếm nhã...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 3,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFEF4444)
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val targetUid = commentToReport?.user?.id ?: "" // Đã khớp với Model User.kt
+                        if (targetUid.isNotBlank() && reportReason.isNotBlank()) {
+                            viewModel.reportUser(
+                                targetId = targetUid,
+                                reason = reportReason,
+                                evidenceLink = requestId,
+                                onSuccess = { msg ->
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    commentToReport = null
+                                    reportReason = ""
+                                },
+                                onError = { err ->
+                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        } else {
+                            Toast.makeText(context, "Vui lòng nhập lý do báo cáo!", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                ) {
+                    Text("Gửi báo cáo")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { commentToReport = null; reportReason = "" }) {
+                    Text("Hủy", color = Color.Gray)
+                }
+            }
+        )
     }
 }
 
@@ -203,14 +278,19 @@ fun OriginalPostSection(request: Request, currentUserId: String, onUpvoteClick: 
 }
 
 @Composable
-fun CommentItem(comment: Comment) {
+fun CommentItem(
+    comment: Comment,
+    currentUserId: String,
+    onReportClick: () -> Unit
+) {
     val userName = comment.user?.displayName ?: "Ẩn danh"
+    val commentAuthorId = comment.user?.id ?: "" // Đã map đúng với file User.kt của bạn
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.Top // [ĐÃ FIX Ở ĐÂY]
+        verticalAlignment = Alignment.Top
     ) {
         // Avatar người bình luận
         if (!comment.user?.avatarUrl.isNullOrEmpty()) {
@@ -233,12 +313,29 @@ fun CommentItem(comment: Comment) {
         // Bong bóng chat chứa nội dung
         Column(
             modifier = Modifier
+                .weight(1f) // Cần weight để đẩy nút Báo cáo sang lề phải
                 .background(Color.White, RoundedCornerShape(16.dp))
                 .padding(12.dp)
         ) {
             Text(text = userName, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1E293B))
             Spacer(modifier = Modifier.height(4.dp))
             Text(text = comment.content, fontSize = 14.sp, color = Color(0xFF334155))
+        }
+
+        // ==========================================
+        // ICON BÁO CÁO (Chỉ hiện khi không phải bình luận của chính mình)
+        // ==========================================
+        if (commentAuthorId != currentUserId && commentAuthorId.isNotBlank()) {
+            IconButton(
+                onClick = onReportClick,
+                modifier = Modifier.size(36.dp).padding(start = 4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Warning,
+                    contentDescription = "Báo cáo vi phạm",
+                    tint = Color(0xFFCBD5E1) // Màu xám nhạt (Slate 300) để không làm rối mắt
+                )
+            }
         }
     }
 }

@@ -43,13 +43,30 @@ class MainActivity : ComponentActivity() {
         // Gọi hàm đăng ký trạm thu sóng Firebase
         subscribeToFirebaseTopic()
 
-        // [CẬP NHẬT Ở ĐÂY]: Lấy documentId từ Push Notification (nếu người dùng nhấn từ Status Bar)
+        // =======================================================
+        // LẤY VÀ IN FIREBASE ID TOKEN ĐỂ DÙNG CHO WEB ADMIN (Nếu cần thiết)
+        // =======================================================
+        val user = FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            user.getIdToken(true).addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    val token = task.result?.token
+                    Log.e("MY_ADMIN_TOKEN", "============ BẮT ĐẦU TOKEN ============")
+                    Log.e("MY_ADMIN_TOKEN", token ?: "Token rỗng!")
+                    Log.e("MY_ADMIN_TOKEN", "============ KẾT THÚC TOKEN ============")
+                } else {
+                    Log.e("MY_ADMIN_TOKEN", "Lấy token thất bại", task.exception)
+                }
+            }
+        }
+
+        // Lấy documentId từ Push Notification (nếu người dùng nhấn từ Status Bar)
         val documentIdFromPush = intent.getStringExtra("documentId")
 
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    // [CẬP NHẬT Ở ĐÂY]: Truyền documentId vào AppNavigation
+                    // Truyền documentId vào AppNavigation
                     AppNavigation(initialDocumentId = documentIdFromPush)
                 }
             }
@@ -57,27 +74,34 @@ class MainActivity : ComponentActivity() {
     }
 
     // =======================================================
-    // 2. HÀM ĐĂNG KÝ KÊNH THÔNG BÁO THEO TÊN NGƯỜI DÙNG
+    // 2. HÀM ĐĂNG KÝ KÊNH THÔNG BÁO (CÁ NHÂN & TOÀN HỆ THỐNG)
     // =======================================================
     private fun subscribeToFirebaseTopic() {
-        val currentUser = FirebaseAuth.getInstance().currentUser
+        val messaging = FirebaseMessaging.getInstance()
 
+        // [MỚI THÊM]: Đăng ký kênh toàn hệ thống để nhận Broadcast từ Admin
+        messaging.subscribeToTopic("all_users")
+            .addOnSuccessListener { Log.d("FCM", "✅ Đã đăng ký kênh Broadcast: all_users") }
+            .addOnFailureListener { Log.e("FCM", "❌ Đăng ký kênh Broadcast thất bại", it) }
+
+        // Kênh thông báo cá nhân (Giữ nguyên)
+        val currentUser = FirebaseAuth.getInstance().currentUser
         val uid = currentUser?.uid
 
         if (!uid.isNullOrBlank()) {
             val sanitizedUid = uid.replace("[^a-zA-Z0-9_\\-]".toRegex(), "_")
             val topicName = "user_$sanitizedUid"
 
-            FirebaseMessaging.getInstance().subscribeToTopic(topicName)
+            messaging.subscribeToTopic(topicName)
                 .addOnCompleteListener { task ->
                     if (task.isSuccessful) {
-                        Log.d("FCM", " Đã đăng ký thành công kênh nhận thông báo: $topicName")
+                        Log.d("FCM", "✅ Đã đăng ký thành công kênh cá nhân: $topicName")
                     } else {
-                        Log.e("FCM", " Đăng ký kênh thất bại", task.exception)
+                        Log.e("FCM", "❌ Đăng ký kênh cá nhân thất bại", task.exception)
                     }
                 }
         } else {
-            Log.w("FCM", " Chưa đăng nhập hoặc không tìm thấy uid")
+            Log.w("FCM", "⚠️ Chưa đăng nhập, chỉ nhận được thông báo chung (all_users)")
         }
     }
 

@@ -35,7 +35,7 @@ class CommunityRepository @Inject constructor(
     }
 
     // ==========================================
-    // [THÊM MỚI] - CÁC HÀM CHO DIỄN ĐÀN THẢO LUẬN
+    // CÁC HÀM CHO DIỄN ĐÀN THẢO LUẬN
     // ==========================================
 
     // Gọi API lấy chi tiết bài viết và danh sách bình luận
@@ -47,5 +47,25 @@ class CommunityRepository @Inject constructor(
     suspend fun addComment(id: String, content: String): Response<BaseResponse<Request>> {
         val body = mapOf("content" to content)
         return apiService.addComment(id, body)
+    }
+
+    // ==========================================
+    // [THÊM MỚI] - HÀM CHO BÁO CÁO VI PHẠM
+    // ==========================================
+
+    // Gọi API gửi báo cáo người dùng hoặc tài liệu vi phạm
+    suspend fun createReport(
+        type: String,
+        targetId: String,
+        reason: String,
+        evidenceLink: String
+    ): Response<BaseResponse<Any>> {
+        val body = mapOf(
+            "type" to type,
+            "targetId" to targetId,
+            "reason" to reason,
+            "evidenceLink" to evidenceLink
+        )
+        return apiService.createReport(body)
     }
 }

@@ -54,15 +54,18 @@ fun RegisterScreen(
 
     val isLoading by viewModel.isLoading.collectAsState()
     val authMessage by viewModel.authMessage.collectAsState()
-    val isAuthSuccess by viewModel.isAuthSuccess.collectAsState()
+    // ĐÃ XÓA DÒNG: val isAuthSuccess by viewModel.isAuthSuccess.collectAsState()
 
     val nameError by viewModel.nameError.collectAsState()
     val emailError by viewModel.emailError.collectAsState()
     val passwordError by viewModel.passwordError.collectAsState()
     val confirmPasswordError by viewModel.confirmPasswordError.collectAsState()
 
-    LaunchedEffect(isAuthSuccess) {
-        if (isAuthSuccess) onRegisterSuccess()
+    // [CẬP NHẬT LUỒNG LẮNG NGHE LỖI]: Bắt sự kiện chuyển trang 1 lần duy nhất
+    LaunchedEffect(Unit) {
+        viewModel.authSuccessEvent.collect {
+            onRegisterSuccess()
+        }
     }
 
     LaunchedEffect(authMessage) {
@@ -72,7 +75,13 @@ fun RegisterScreen(
         }
     }
 
-    // [CẬP NHẬT UI]: Nền Gradient toàn màn hình đồng bộ với Login
+    LaunchedEffect(authMessage) {
+        authMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.resetMessage()
+        }
+    }
+
     val backgroundGradient = Brush.verticalGradient(
         colors = listOf(Color(0xFF4C9EEB), Color(0xFF1E88E5))
     )
@@ -88,7 +97,6 @@ fun RegisterScreen(
         verticalArrangement = Arrangement.Center
     ) {
 
-        // Phần Header Logo/Chào mừng
         Spacer(modifier = Modifier.height(24.dp))
         Box(
             modifier = Modifier
@@ -113,12 +121,11 @@ fun RegisterScreen(
         )
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Card Form Đăng Ký
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.9f)
                 .shadow(16.dp, RoundedCornerShape(32.dp), spotColor = Color(0x40000000))
-                .padding(bottom = 24.dp), // Padding dưới để cuộn thoải mái
+                .padding(bottom = 24.dp),
             shape = RoundedCornerShape(32.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
@@ -126,11 +133,10 @@ fun RegisterScreen(
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Định dạng chung cho các ô nhập liệu
                 val textFieldColors = TextFieldDefaults.colors(
                     focusedContainerColor = Color(0xFFF1F5F9),
                     unfocusedContainerColor = Color(0xFFF1F5F9),
-                    errorContainerColor = Color(0xFFFEF2F2), // Nền đỏ nhạt khi có lỗi
+                    errorContainerColor = Color(0xFFFEF2F2),
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent,
@@ -139,7 +145,6 @@ fun RegisterScreen(
                     unfocusedTextColor = Color(0xFF1E293B)
                 )
 
-                // Nhập Họ và Tên
                 TextField(
                     value = name,
                     onValueChange = { name = it },
@@ -155,7 +160,6 @@ fun RegisterScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Nhập Email
                 TextField(
                     value = email,
                     onValueChange = { email = it },
@@ -171,7 +175,6 @@ fun RegisterScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Nhập Mật khẩu
                 TextField(
                     value = password,
                     onValueChange = { password = it },
@@ -194,7 +197,6 @@ fun RegisterScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Xác nhận Mật khẩu
                 TextField(
                     value = confirmPassword,
                     onValueChange = { confirmPassword = it },
@@ -215,7 +217,6 @@ fun RegisterScreen(
                     supportingText = { if (confirmPasswordError != null) Text(confirmPasswordError!!, color = MaterialTheme.colorScheme.error) }
                 )
 
-                // Checkbox Điều khoản
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -235,7 +236,6 @@ fun RegisterScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Nút Đăng ký
                 Button(
                     onClick = {
                         viewModel.register(name.trim(), email.trim(), password.trim(), confirmPassword.trim(), isTermsAccepted)
@@ -254,7 +254,6 @@ fun RegisterScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Link chuyển về Đăng nhập
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(text = "Đã có tài khoản? ", color = Color(0xFF64748B), fontSize = 14.sp)
                     Text(
