@@ -19,7 +19,9 @@ const userRoutes = require('./routes/user.routes');
 const documentRoutes = require('./routes/document.routes');
 const notificationRoutes = require('./routes/notification.routes');
 const requestRoutes = require('./routes/request.routes'); 
-const chatRoutes = require('./routes/chat.routes');        
+const chatRoutes = require('./routes/chat.routes'); 
+const reportRoutes = require('./routes/report.routes');
+const categoryRoutes = require('./routes/category.routes'); // [THÊM MỚI]: Import Route Danh mục
 
 // --- Import Models & Services ---
 const Document = require('./models/Document');
@@ -48,22 +50,18 @@ if (!admin.apps.length) {
 const app = express();
 const server = http.createServer(app); 
 
-// --- Cấu hình CORS ---
-const corsOrigins = (process.env.CORS_ORIGINS || '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
-const corsOptions = process.env.NODE_ENV === 'production'
-    ? {
-        origin: (origin, callback) => {
-            if (!origin || corsOrigins.includes(origin)) {
-                return callback(null, true);
-            }
-            return callback(new Error('CORS_NOT_ALLOWED'));
-        }
-    }
-    : { origin: '*' }; 
+// =========================================================================
+// CẤU HÌNH CORS "BẤT TỬ" ĐỂ TRỊ DỨT ĐIỂM LỖI TRÊN TRÌNH DUYỆT
+// =========================================================================
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Cho phép mọi tên miền (bao gồm cả Live Server 127.0.0.1:5500) truy cập
+        callback(null, true);
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // Cho phép mọi method
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id'], // Cấp phép header chứa Token
+    credentials: true // Bắt buộc phải có để gửi Authorization Token qua Web
+};
 
 // --- Khởi tạo Socket.IO ---
 const io = new Server(server, {
@@ -73,7 +71,7 @@ const io = new Server(server, {
 // --- Cấu hình Middlewares ---
 app.use(loggerMiddleware);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors(corsOptions));
+app.use(cors(corsOptions)); // Áp dụng CORS mới
 app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ limit: '25mb', extended: true }));
@@ -112,6 +110,8 @@ app.use('/api', documentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/requests', requestRoutes); 
 app.use('/api/chat', chatRoutes);        
+app.use('/api/reports', reportRoutes); 
+app.use('/api/categories', categoryRoutes); // [THÊM MỚI]: Đăng ký Route Danh mục
 
 // --- Health Checks ---
 app.get('/health', (req, res) => res.status(200).json({ status: 'UP' }));
@@ -202,7 +202,7 @@ io.on('connection', (socket) => {
 });
 
 // =========================================================================
-// KHỞI ĐỘNG SERVER & KẾT NỐI DATABASE
+// KHỔI ĐỘNG SERVER & KẾT NỐI DATABASE
 // =========================================================================
 
 const PORT = process.env.PORT || 3000;

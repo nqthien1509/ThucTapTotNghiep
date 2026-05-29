@@ -12,6 +12,19 @@ const userSchema = new mongoose.Schema(
     bio: { type: String, default: '' },
     
     // ==========================================
+    // [THÊM MỚI]: PHÂN QUYỀN & QUẢN TRỊ VIÊN
+    // ==========================================
+    role: { 
+      type: String, 
+      enum: ['student', 'admin'], 
+      default: 'student' // Mặc định tất cả tài khoản đăng ký mới là student
+    },
+    isBlocked: { 
+      type: Boolean, 
+      default: false // Mặc định tài khoản hoạt động bình thường, chuyển thành true nếu vi phạm khiếm nhã
+    },
+    
+    // ==========================================
     // [CẬP NHẬT TRỌNG TÂM CHO BẢNG XẾP HẠNG]
     // ==========================================
     

@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { fromPath } = require('pdf2pic'); 
 const Document = require('../models/Document');
-const User = require('../models/User'); // [CẬP NHẬT]: Import User để cộng điểm
+const User = require('../models/User'); 
 
 class DocumentController {
     async upload(req, res, next) {
@@ -80,8 +80,7 @@ class DocumentController {
             });
 
             // ==========================================
-            // [CẬP NHẬT GAMIFICATION]: CỘNG ĐIỂM CHO USER
-            // Tăng totalUploads lên 1 và cộng 10 điểm uy tín
+            // CỘNG ĐIỂM CHO USER
             // ==========================================
             try {
                 await User.findByIdAndUpdate(req.user.uid, {
@@ -114,7 +113,6 @@ class DocumentController {
             if (createdDoc && createdDoc._id) {
                 try {
                     await docRepo.deleteById(createdDoc._id);
-                    // Rút lại điểm nếu upload thất bại sau khi đã tạo doc
                     await User.findByIdAndUpdate(req.user.uid, {
                         $inc: { totalUploads: -1, reputationScore: -10 }
                     });
@@ -233,7 +231,7 @@ class DocumentController {
         try {
             await docService.deleteDocument(req.params.id, req.user.uid);
             
-            // [CẬP NHẬT GAMIFICATION]: TRỪ ĐIỂM KHI XÓA TÀI LIỆU
+            // TRỪ ĐIỂM KHI XÓA TÀI LIỆU
             try {
                 await User.findByIdAndUpdate(req.user.uid, {
                     $inc: { totalUploads: -1, reputationScore: -10 }
@@ -271,37 +269,89 @@ class DocumentController {
         }
     }
 
-    // ============================================================
-    // [CẬP NHẬT LẠI]: API LẤY BẢNG XẾP HẠNG TÀI LIỆU
-    // Fix lỗi MongoDB sort sai các dữ liệu cũ bị thiếu trường views/downloads
-    // ============================================================
     async getTopDocuments(req, res, next) {
         try {
-            // Lấy tất cả tài liệu đã duyệt
             const allDocs = await Document.find({ status: 'verified' });
             
-            // Dùng Javascript sort để ép toàn bộ dữ liệu null/lỗi về 0 tính toán cho chuẩn
             const sortedDocs = allDocs.sort((a, b) => {
                 const downA = a.downloads || 0;
                 const downB = b.downloads || 0;
                 
-                // Ưu tiên 1: Lượt tải giảm dần
                 if (downB !== downA) {
                     return downB - downA; 
                 }
                 
-                // Ưu tiên 2: Nếu lượt tải bằng nhau -> Lượt xem giảm dần
                 const viewA = a.views || 0;
                 const viewB = b.views || 0;
                 return viewB - viewA; 
             });
 
-            // Cắt lấy đúng 10 tài liệu top đầu
             const top10 = sortedDocs.slice(0, 10);
-            
             res.status(200).json({ success: true, data: top10 });
         } catch (error) {
             next(error);
+        }
+    }
+
+    // ============================================================
+    // [THÊM MỚI DÀNH CHO ADMIN]: QUẢN LÝ KHO TÀI LIỆU
+    // ============================================================
+    
+    // Lấy danh sách toàn bộ tài liệu (Bao gồm cả đang chờ duyệt hoặc bị lỗi)
+    async getAllDocumentsForAdmin(req, res, next) {
+        try {
+            const docs = await Document.find({}).sort({ createdAt: -1 });
+            res.status(200).json({ success: true, data: docs });
+        } catch (error) {
+            req.log.error({ err: error }, 'Lỗi khi Admin lấy danh sách tài liệu');
+            res.status(500).json({ success: false, message: 'Lỗi server khi lấy danh sách tài liệu!' });
+        }
+    }
+
+    // Xóa tài liệu trực tiếp bởi Admin (Xóa luôn file vật lý)
+    async deleteDocumentByAdmin(req, res, next) {
+        try {
+            const { id } = req.params;
+            const doc = await Document.findById(id);
+
+            if (!doc) {
+                return res.status(404).json({ success: false, message: 'Tài liệu không tồn tại!' });
+            }
+
+            // 1. Xóa file vật lý (PDF) khỏi ổ cứng
+            if (doc.fileUrl) {
+                const filePath = path.join(process.cwd(), doc.fileUrl);
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            }
+
+            // 2. Xóa ảnh bìa (Thumbnail) khỏi ổ cứng
+            if (doc.thumbnailUrl) {
+                const thumbPath = path.join(process.cwd(), doc.thumbnailUrl);
+                if (fs.existsSync(thumbPath)) {
+                    fs.unlinkSync(thumbPath);
+                }
+            }
+
+            // 3. Xóa Document trong Database
+            await Document.findByIdAndDelete(id);
+
+            // 4. Trừ điểm của người đã tải tài liệu này lên
+            try {
+                await User.findByIdAndUpdate(doc.userId, {
+                    $inc: { totalUploads: -1, reputationScore: -10 }
+                });
+            } catch (userErr) {
+                req.log.error({ err: userErr }, 'Lỗi khi trừ điểm user do Admin xóa tài liệu');
+            }
+
+            req.log.info({ docId: id, adminId: req.user.uid }, 'Admin đã xóa tài liệu thành công');
+            return res.status(200).json({ success: true, message: 'Đã xóa tài liệu và trừ điểm người đăng thành công!' });
+
+        } catch (error) {
+            req.log.error({ err: error }, 'Lỗi khi Admin xóa tài liệu');
+            res.status(500).json({ success: false, message: 'Lỗi server khi xóa tài liệu!' });
         }
     }
 }
