@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StuShare Admin - Hệ Thống Quản Trị Toàn Diện</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        body { background-color: #f1f5f9; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        .navbar { background-color: #0f172a; }
+        .stat-card { background: white; border-radius: 12px; padding: 24px; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+        .dashboard-section { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); margin-bottom: 24px; }
+        #mainContent { display: none; }
+        #loginCard { max-width: 400px; margin: 100px auto; border: none; }
+        .chart-container { position: relative; height: 300px; width: 100%; }
+        .nav-tabs .nav-link { color: #475569; border: none; padding: 12px 20px; margin-bottom: -1px; }
+        .nav-tabs .nav-link.active { font-weight: bold; color: #0f172a; border-bottom: 3px solid #3b82f6; background: transparent; }
+        .nav-tabs .nav-link:hover { color: #3b82f6; }
+        .thumbnail-preview { width: 50px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid #e2e8f0; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark mb-4 shadow-sm">
+        <div class="container-fluid text-white">
+            <span class="navbar-brand mb-0 h1 fw-bold">🛡️ StuShare Admin Dashboard</span>
+            <div class="d-flex align-items-center">
+                <span id="userEmailDisplay" class="me-3 small text-light-50"></span>
+                <button id="btnLogout" class="btn btn-outline-danger btn-sm" style="display: none;" onclick="logout()">Đăng xuất</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4">
+        
+        <div class="card shadow border-0" id="loginCard">
+            <div class="card-body p-4">
+                <div class="text-center mb-4">
+                    <h4 class="fw-bold">Đăng Nhập Hệ Thống</h4>
+                    <p class="text-muted small">Cổng xác thực dành cho Ban Quản Trị</p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Email</label>
+                    <input type="email" id="emailInput" class="form-control" placeholder="admin@gmail.com">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Mật khẩu</label>
+                    <input type="password" id="passwordInput" class="form-control" placeholder="******">
+                </div>
+                <button id="btnLoginBtn" class="btn btn-primary w-100 fw-bold py-2" onclick="login()">Đăng nhập</button>
+                <div id="loginError" class="alert alert-danger mt-3 py-2 text-center" style="display: none; font-size: 0.9rem;"></div>
+            </div>
+        </div>
+
+        <div id="mainContent">
+            
+            <ul class="nav nav-tabs mb-4 flex-wrap" id="adminTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#tab-dashboard" type="button" role="tab">📊 Thống Kê</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="reports-tab" data-bs-toggle="tab" data-bs-target="#tab-reports" type="button" role="tab">🚨 Báo Cáo</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#tab-users" type="button" role="tab">👥 Người Dùng</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="documents-tab" data-bs-toggle="tab" data-bs-target="#tab-documents" type="button" role="tab">📚 Kho Tài Liệu</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="categories-tab" data-bs-toggle="tab" data-bs-target="#tab-categories" type="button" role="tab">📁 Danh Mục (Môn học)</button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="adminTabsContent">
+                
+                <div class="tab-pane fade show active" id="tab-dashboard" role="tabpanel">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="stat-card shadow-sm d-flex align-items-center justify-content-between">
+                                <div><p class="text-muted mb-1 text-uppercase small fw-bold">Tổng Người Dùng</p><h2 class="fw-bold mb-0 text-dark" id="statUsers">0</h2></div>
+                                <div class="fs-1">👥</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stat-card shadow-sm d-flex align-items-center justify-content-between">
+                                <div><p class="text-muted mb-1 text-uppercase small fw-bold">Tài Liệu Hệ Thống</p><h2 class="fw-bold mb-0 text-primary" id="statDocs">0</h2></div>
+                                <div class="fs-1">📚</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="stat-card shadow-sm d-flex align-items-center justify-content-between">
+                                <div><p class="text-muted mb-1 text-uppercase small fw-bold">Báo Cáo Đang Chờ</p><h2 class="fw-bold mb-0 text-danger" id="statReports">0</h2></div>
+                                <div class="fs-1">⚠️</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-8">
+                            <div class="dashboard-section shadow-sm">
+                                <h5 class="fw-bold mb-3">📊 Top 5 Trường Có Nhiều Tài Liệu Nhất</h5>
+                                <div class="chart-container"><canvas id="barChartDocuments"></canvas></div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="dashboard-section shadow-sm">
+                                <h5 class="fw-bold mb-3">🎯 Tỷ Lệ Đơn Tố Cáo Phân Loại</h5>
+                                <div class="chart-container"><canvas id="pieChartReports"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-section shadow-sm border-start border-warning border-5">
+                        <h5 class="fw-bold mb-3">📢 Gửi Thông Báo Toàn Hệ Thống (Broadcast)</h5>
+                        <div class="row g-3">
+                            <div class="col-md-4"><input type="text" id="notiTitle" class="form-control" placeholder="Tiêu đề (VD: Cập nhật...)"></div>
+                            <div class="col-md-6"><input type="text" id="notiBody" class="form-control" placeholder="Nội dung chi tiết..."></div>
+                            <div class="col-md-2"><button class="btn btn-warning w-100 fw-bold shadow-sm" onclick="sendBroadcast()" id="btnBroadcast">🚀 Gửi Ngay</button></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tab-reports" role="tabpanel">
+                    <div class="dashboard-section shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+                            <h5 class="fw-bold mb-0">🚨 Danh sách Đơn Tố Cáo Cần Xử Lý</h5>
+                            <button class="btn btn-dark btn-sm" onclick="fetchReports()">🔄 Làm mới</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr><th>Người tố cáo</th><th>Loại vi phạm</th><th>Đối tượng bị kiện</th><th>Lý do</th><th>Trạng thái</th><th class="text-center">Hành động</th></tr>
+                                </thead>
+                                <tbody id="reportTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tab-users" role="tabpanel">
+                    <div class="dashboard-section shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+                            <h5 class="fw-bold mb-0">👥 Quản Lý Người Dùng Toàn Hệ Thống</h5>
+                            <div class="d-flex gap-2">
+                                <input type="text" id="userSearch" class="form-control form-control-sm" placeholder="🔍 Tìm tên hoặc email..." onkeyup="filterUsers()" style="width: 250px;">
+                                <button class="btn btn-dark btn-sm" onclick="fetchUsers()">🔄 Làm mới</button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr><th>Người dùng</th><th>Email</th><th class="text-center">Tổng tài liệu</th><th>Trạng thái</th><th class="text-center">Khóa / Mở Khóa</th></tr>
+                                </thead>
+                                <tbody id="userTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tab-documents" role="tabpanel">
+                    <div class="dashboard-section shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+                            <h5 class="fw-bold mb-0">📚 Quản Lý Kho Tài Liệu</h5>
+                            <div class="d-flex gap-2">
+                                <input type="text" id="docSearch" class="form-control form-control-sm" placeholder="🔍 Tìm tên tài liệu..." onkeyup="filterDocuments()" style="width: 250px;">
+                                <button class="btn btn-dark btn-sm" onclick="fetchDocuments()">🔄 Làm mới</button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Ảnh bìa</th>
+                                        <th>Tên tài liệu</th>
+                                        <th>Danh mục</th>
+                                        <th>Trạng thái</th>
+                                        <th class="text-center">Lượt tải</th>
+                                        <th class="text-center">Hành động</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="documentTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tab-categories" role="tabpanel">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="dashboard-section shadow-sm">
+                                <h5 class="fw-bold mb-3 border-bottom pb-2">➕ Thêm Danh Mục Mới</h5>
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Tên môn học / Danh mục</label>
+                                    <input type="text" id="catName" class="form-control" placeholder="VD: Toán Cao Cấp...">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Mô tả (Không bắt buộc)</label>
+                                    <textarea id="catDesc" class="form-control" rows="3" placeholder="Mô tả ngắn gọn..."></textarea>
+                                </div>
+                                <button class="btn btn-primary w-100 fw-bold" onclick="createCategory()">Thêm vào hệ thống</button>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="dashboard-section shadow-sm">
+                                <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+                                    <h5 class="fw-bold mb-0">📁 Danh Sách Các Môn Học Hiện Có</h5>
+                                    <button class="btn btn-dark btn-sm" onclick="fetchCategories()">🔄 Làm mới</button>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle">
+                                        <thead class="table-light">
+                                            <tr><th>Tên danh mục</th><th>Mô tả</th><th>Ngày tạo</th><th class="text-center">Hành động</th></tr>
+                                        </thead>
+                                        <tbody id="categoryTableBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Cấu hình Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyAIC3iy4JIs5MzyylVKbbut9LVZP2ayLaA",
+            authDomain: "thuctaptotnghiep-426d2.firebaseapp.com",
+            projectId: "thuctaptotnghiep-426d2",
+            storageBucket: "thuctaptotnghiep-426d2.firebasestorage.app",
+            messagingSenderId: "391609449711",
+            appId: "1:391609449711:web:0e24271243cd619d10ef1a",
+            measurementId: "G-WFBHYZ04LH"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const API_BASE_URL = 'http://localhost:3000/api';
+
+        let docBarChart = null, reportPieChart = null;
+        let allUsers = [], allDocuments = []; // Biến lưu tạm để lọc tìm kiếm
+
+        // ==========================================
+        // KHỞI TẠO & XÁC THỰC
+        // ==========================================
+        firebase.auth().onAuthStateChanged((user) => {
+            if (user) {
+                document.getElementById('loginCard').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+                document.getElementById('btnLogout').style.display = 'block';
+                document.getElementById('userEmailDisplay').innerText = `Admin: ${user.email}`;
+                refreshAllData();
+            } else {
+                document.getElementById('loginCard').style.display = 'block';
+                document.getElementById('mainContent').style.display = 'none';
+                document.getElementById('btnLogout').style.display = 'none';
+                document.getElementById('userEmailDisplay').innerText = '';
+            }
+        });
+
+        function login() {
+            const email = document.getElementById('emailInput').value;
+            const pwd = document.getElementById('passwordInput').value;
+            const err = document.getElementById('loginError');
+            const btn = document.getElementById('btnLoginBtn');
+            err.style.display = 'none'; btn.innerText = "Đang kết nối..."; btn.disabled = true;
+
+            firebase.auth().signInWithEmailAndPassword(email, pwd)
+                .then(() => { btn.innerText = "Đăng nhập"; btn.disabled = false; })
+                .catch((error) => { btn.innerText = "Đăng nhập"; btn.disabled = false; err.innerText = "Lỗi: " + error.message; err.style.display = 'block'; });
+        }
+
+        function logout() { firebase.auth().signOut(); }
+
+        function refreshAllData() {
+            fetchDashboardStats(); fetchReports(); fetchUsers(); fetchDocuments(); fetchCategories();
+        }
+
+        // ==========================================
+        // MODULE 1, 2, 3: Dashboard, Report, User (Giữ nguyên logic cũ)
+        // ==========================================
+        async function fetchDashboardStats() {
+            const user = firebase.auth().currentUser; if (!user) return;
+            try {
+                const token = await user.getIdToken(true);
+                const response = await fetch(`${API_BASE_URL}/reports/admin/dashboard-stats`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    document.getElementById('statUsers').innerText = result.data.summary.totalUsers;
+                    document.getElementById('statDocs').innerText = result.data.summary.totalDocuments;
+                    document.getElementById('statReports').innerText = result.data.summary.pendingReports;
+                    
+                    const ctxBar = document.getElementById('barChartDocuments').getContext('2d');
+                    if (docBarChart) docBarChart.destroy(); 
+                    docBarChart = new Chart(ctxBar, {
+                        type: 'bar', data: { labels: result.data.charts.documentsBySchool.map(i => i._id || 'Khác'), datasets: [{ label: 'Số lượng', data: result.data.charts.documentsBySchool.map(i => i.count), backgroundColor: '#3b82f6', borderRadius: 6 }] },
+                        options: { responsive: true, maintainAspectRatio: false }
+                    });
+
+                    const ctxPie = document.getElementById('pieChartReports').getContext('2d');
+                    if (reportPieChart) reportPieChart.destroy();
+                    reportPieChart = new Chart(ctxPie, {
+                        type: 'doughnut', data: { labels: result.data.charts.reportsByType.map(i => i._id === 'document' ? 'Tài liệu' : 'Người dùng'), datasets: [{ data: result.data.charts.reportsByType.map(i => i.count), backgroundColor: ['#ef4444', '#f59e0b'] }] },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+                    });
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        async function sendBroadcast() {
+            const title = document.getElementById('notiTitle').value; const body = document.getElementById('notiBody').value;
+            if (!title || !body) return alert("Vui lòng nhập đầy đủ Tiêu đề và Nội dung!");
+            if (!confirm(`Xác nhận gửi thông báo:\nTiêu đề: ${title}\nNội dung: ${body}`)) return;
+            const btn = document.getElementById('btnBroadcast'); btn.innerHTML = 'Đang bắn...'; btn.disabled = true;
+            try {
+                const token = await firebase.auth().currentUser.getIdToken();
+                const res = await fetch(`${API_BASE_URL}/reports/admin/broadcast`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ title, body }) });
+                if (res.ok) { alert("🚀 Bắn thông báo thành công!"); document.getElementById('notiTitle').value = ''; document.getElementById('notiBody').value = ''; }
+            } catch (e) { alert('Lỗi Backend!'); }
+            btn.innerHTML = '🚀 Gửi Ngay'; btn.disabled = false;
+        }
+
+        async function fetchReports() {
+            const tbody = document.getElementById('reportTableBody'); tbody.innerHTML = '<tr><td colspan="6" class="text-center">Đang tải...</td></tr>';
+            try {
+                const token = await firebase.auth().currentUser.getIdToken();
+                const response = await fetch(`${API_BASE_URL}/reports/admin/all`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    tbody.innerHTML = result.data.length === 0 ? '<tr><td colspan="6" class="text-center text-success">Không có báo cáo chờ.</td></tr>' : result.data.map(r => `
+                        <tr><td class="fw-bold">${r.reporter?.displayName || 'Sinh viên'}</td>
+                        <td><span class="badge ${r.type === 'document' ? 'bg-info' : 'bg-warning'} text-dark">${r.type.toUpperCase()}</span></td>
+                        <td>${r.type === 'document' ? `TL: <strong>${r.targetDocument?.title || '[Xóa]'}</strong>` : `User: <strong>${r.targetUser?.displayName || '[Xóa]'}</strong>`}</td>
+                        <td>${r.reason}</td>
+                        <td>${r.status === 'pending' ? '<span class="badge bg-danger">Chờ xử lý</span>' : '<span class="badge bg-success">Đã giải quyết</span>'}</td>
+                        <td class="text-center">${r.status === 'pending' ? `<button class="btn btn-sm btn-danger me-1" onclick="actionReport('${r._id}', 'resolved', true)">Khóa</button><button class="btn btn-sm btn-outline-secondary" onclick="actionReport('${r._id}', 'dismissed', false)">Bỏ qua</button>` : `<span class="text-muted small">Đã xử lý xong</span>`}</td></tr>
+                    `).join('');
+                }
+            } catch (e) { tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Lỗi kết nối.</td></tr>'; }
+        }
+
+        async function actionReport(reportId, status, blockTarget) {
+            if (!confirm("Xác nhận hành động kiểm duyệt?")) return;
+            try {
+                const token = await firebase.auth().currentUser.getIdToken();
+                const res = await fetch(`${API_BASE_URL}/reports/admin/action/${reportId}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ status, blockTarget }) });
+                if (res.ok) { alert('Thành công!'); refreshAllData(); }
+            } catch (e) { alert('Lỗi giao tiếp backend.'); }
+        }
+
+        async function fetchUsers() {
+            const tbody = document.getElementById('userTableBody'); tbody.innerHTML = '<tr><td colspan="5" class="text-center">Đang tải...</td></tr>';
+            try {
+                const token = await firebase.auth().currentUser.getIdToken();
+                const res = await fetch(`${API_BASE_URL}/user/admin/users`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const result = await res.json();
+                if (res.ok && result.success) { allUsers = result.data; renderUserTable(allUsers); }
+            } catch (e) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Lỗi kết nối.</td></tr>'; }
+        }
+
+        function renderUserTable(users) {
+            const tbody = document.getElementById('userTableBody');
+            tbody.innerHTML = users.length === 0 ? '<tr><td colspan="5" class="text-center">Không tìm thấy người dùng.</td></tr>' : users.map(u => `
+                <tr><td class="fw-bold">${u.displayName || 'Chưa đặt tên'}</td><td>${u.email || 'N/A'}</td><td class="text-center fw-semibold text-primary">${u.totalUploads || 0}</td>
+                <td><span class="badge ${u.isBlocked ? 'bg-danger' : 'bg-success'}">${u.isBlocked ? 'Đang Khóa' : 'Hoạt động'}</span></td>
+                <td class="text-center"><button class="btn btn-sm ${u.isBlocked ? 'btn-success' : 'btn-outline-danger'} fw-bold shadow-sm" onclick="toggleUser('${u._id}')">${u.isBlocked ? '🔓 Mở khóa' : '🔒 Khóa'}</button></td></tr>
+            `).join('');
+        }
+
+        function filterUsers() {
+            const term = document.getElementById('userSearch').value.toLowerCase();
+            renderUserTable(allUsers.filter(u => (u.displayName?.toLowerCase().includes(term)) || (u.email?.toLowerCase().includes(term))));
+        }
+
+        async function toggleUser(id) {
+            if(!confirm("Thay đổi trạng thái tài khoản này?")) return;
+            try {
+                const token = await firebase.auth().currentUser.getIdToken();
+                const res = await fetch(`${API_BASE_URL}/user/admin/users/${id}/toggle-block`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
+                if(res.ok) fetchUsers();
+            } catch(e) { alert('Lỗi backend.'); }
+        }
+
+        // ==========================================
+        // MODULE 4: QUẢN LÝ KHO TÀI LIỆU
+        // ==========================================
+        async function fetchDocuments() {
+            const tbody = document.getElementById('documentTableBody'); tbody.innerHTML = '<tr><td colspan="6" class="text-center">Đang tải...</td></tr>';
+            try {
+                const token = await firebase.auth().currentUser.getIdToken();
+                const res = await fetch(`${API_BASE_URL}/admin/documents/all`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const result = await res.json();
+                if (res.ok && result.success) { allDocuments = result.data; renderDocTable(allDocuments); }
+            } catch (e) { tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Lỗi kết nối.</td></tr>'; }
+        }
+
+        function renderDocTable(docs) {
+            const tbody = document.getElementById('documentTableBody');
+            tbody.innerHTML = docs.length === 0 ? '<tr><td colspan="6" class="text-center">Không tìm thấy tài liệu.</td></tr>' : docs.map(d => {
+                const thumb = d.thumbnailUrl ? `http://localhost:3000${d.thumbnailUrl}` : 'https://via.placeholder.com/50x60?text=PDF';
+                let statusBadge = '';
+                if(d.status === 'verified') statusBadge = '<span class="badge bg-success">Đã duyệt</span>';
+                else if(d.status === 'pending') statusBadge = '<span class="badge bg-warning text-dark">Chờ duyệt</span>';
+                else statusBadge = '<span class="badge bg-danger">Lỗi/Bị cấm</span>';
+
+                return `
+                <tr>
+                    <td><img src="${thumb}" class="thumbnail-preview" alt="Thumb"></td>
+                    <td class="fw-bold text-primary">${d.title}</td>
+                    <td><span class="badge bg-secondary">${d.category || 'Khác'}</span></td>
+                    <td>${statusBadge}</td>
+                    <td class="text-center fw-bold">${d.downloads || 0}</td>
+                    <td class="text-center">
+                        <a href="http://localhost:3000${d.fileUrl}" target="_blank" class="btn btn-sm btn-outline-info me-1">👁️ Xem</a>
+                        <button class="btn btn-sm btn-danger shadow-sm" onclick="deleteDocument('${d._id}')">🗑️ Xóa</button>
+                    </td>
+                </tr>
+            `}).join('');
+        }
+
+        function filterDocuments() {
+            const term = document.getElementById('docSearch').value.toLowerCase();
+            renderDocTable(allDocuments.filter(d => (d.title?.toLowerCase().includes(term))));
+        }
+
+        async function deleteDocument(id) {
+            if(!confirm("⚠️ CẢNH BÁO: Xóa tài liệu này sẽ trừ điểm của sinh viên đã đăng. Bạn có chắc chắn muốn XÓA VĨNH VIỄN?")) return;
+            try {
+                const token = await firebase.auth().currentUser.getIdToken();
+                const res = await fetch(`${API_BASE_URL}/admin/documents/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                const result = await res.json();
+                if(res.ok && result.success) { alert(result.message); fetchDocuments(); fetchDashboardStats(); }
+                else alert('Lỗi: ' + result.message);
+            } catch(e) { alert('Lỗi kết nối Backend!'); }
+        }
+
+        // ==========================================
+        // MODULE 5: QUẢN LÝ DANH MỤC (CATEGORIES)
+        // ==========================================
+        async function fetchCategories() {
+            const tbody = document.getElementById('categoryTableBody'); tbody.innerHTML = '<tr><td colspan="4" class="text-center">Đang tải...</td></tr>';
+            try {
+                const res = await fetch(`${API_BASE_URL}/categories`);
+                const result = await res.json();
+                if (res.ok && result.success) {
+                    tbody.innerHTML = result.data.length === 0 ? '<tr><td colspan="4" class="text-center">Chưa có danh mục nào.</td></tr>' : result.data.map(c => `
+                        <tr>
+                            <td class="fw-bold text-dark">${c.name}</td>
+                            <td class="text-muted small">${c.description || 'Không có mô tả'}</td>
+                            <td class="small">${new Date(c.createdAt).toLocaleDateString('vi-VN')}</td>
+                            <td class="text-center"><button class="btn btn-sm btn-outline-danger" onclick="deleteCategory('${c._id}')">Xóa</button></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (e) { tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Lỗi kết nối.</td></tr>'; }
+        }
+
+        async function createCategory() {
+            const name = document.getElementById('catName').value;
+            const description = document.getElementById('catDesc').value;
+            if(!name) return alert("Vui lòng nhập tên danh mục!");
+
+            try {
+                const token = await firebase.auth().currentUser.getIdToken();
+                const res = await fetch(`${API_BASE_URL}/categories/admin`, {
+                    method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description })
+                });
+                const result = await res.json();
+                if(res.ok && result.success) {
+                    alert("Đã thêm danh mục mới!");
+                    document.getElementById('catName').value = ''; document.getElementById('catDesc').value = '';
+                    fetchCategories();
+                } else alert('Lỗi: ' + result.message);
+            } catch(e) { alert('Lỗi kết nối Backend!'); }
+        }
+
+        async function deleteCategory(id) {
+            if(!confirm("Xóa danh mục này sẽ không ảnh hưởng tới các tài liệu cũ, nhưng người dùng sẽ không thể chọn nó khi upload nữa. Xác nhận xóa?")) return;
+            try {
+                const token = await firebase.auth().currentUser.getIdToken();
+                const res = await fetch(`${API_BASE_URL}/categories/admin/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                if(res.ok) fetchCategories();
+            } catch(e) { alert('Lỗi giao tiếp backend.'); }
+        }
+    </script>
+</body>
+</html>
