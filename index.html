@@ -242,14 +242,15 @@
         };
 
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-        const API_BASE_URL = 'http://localhost:3000/api';
+        
+        // [CẬP NHẬT TRỌNG TÂM]: Thay thế IP localhost bằng link máy chủ Render chạy trực tuyến ổn định
+        const API_SERVER_URL = 'https://stushare-backend.onrender.com';
+        const API_BASE_URL = `${API_SERVER_URL}/api`;
 
         let docBarChart = null, reportPieChart = null;
-        let allUsers = [], allDocuments = []; // Biến lưu tạm để lọc tìm kiếm
+        let allUsers = [], allDocuments = [];
 
-        // ==========================================
         // KHỞI TẠO & XÁC THỰC
-        // ==========================================
         firebase.auth().onAuthStateChanged((user) => {
             if (user) {
                 document.getElementById('loginCard').style.display = 'none';
@@ -283,9 +284,6 @@
             fetchDashboardStats(); fetchReports(); fetchUsers(); fetchDocuments(); fetchCategories();
         }
 
-        // ==========================================
-        // MODULE 1, 2, 3: Dashboard, Report, User (Giữ nguyên logic cũ)
-        // ==========================================
         async function fetchDashboardStats() {
             const user = firebase.auth().currentUser; if (!user) return;
             try {
@@ -388,9 +386,6 @@
             } catch(e) { alert('Lỗi backend.'); }
         }
 
-        // ==========================================
-        // MODULE 4: QUẢN LÝ KHO TÀI LIỆU
-        // ==========================================
         async function fetchDocuments() {
             const tbody = document.getElementById('documentTableBody'); tbody.innerHTML = '<tr><td colspan="6" class="text-center">Đang tải...</td></tr>';
             try {
@@ -404,7 +399,8 @@
         function renderDocTable(docs) {
             const tbody = document.getElementById('documentTableBody');
             tbody.innerHTML = docs.length === 0 ? '<tr><td colspan="6" class="text-center">Không tìm thấy tài liệu.</td></tr>' : docs.map(d => {
-                const thumb = d.thumbnailUrl ? `http://localhost:3000${d.thumbnailUrl}` : 'https://via.placeholder.com/50x60?text=PDF';
+                // [CẬP NHẬT TRỌNG TÂM]: Chuẩn hóa nối link ảnh bìa và file PDF trực tuyến thông qua API_SERVER_URL
+                const thumb = d.thumbnailUrl ? `${API_SERVER_URL}${d.thumbnailUrl}` : 'https://via.placeholder.com/50x60?text=PDF';
                 let statusBadge = '';
                 if(d.status === 'verified') statusBadge = '<span class="badge bg-success">Đã duyệt</span>';
                 else if(d.status === 'pending') statusBadge = '<span class="badge bg-warning text-dark">Chờ duyệt</span>';
@@ -418,7 +414,7 @@
                     <td>${statusBadge}</td>
                     <td class="text-center fw-bold">${d.downloads || 0}</td>
                     <td class="text-center">
-                        <a href="http://localhost:3000${d.fileUrl}" target="_blank" class="btn btn-sm btn-outline-info me-1">👁️ Xem</a>
+                        <a href="${API_SERVER_URL}${d.fileUrl}" target="_blank" class="btn btn-sm btn-outline-info me-1">👁️ Xem</a>
                         <button class="btn btn-sm btn-danger shadow-sm" onclick="deleteDocument('${d._id}')">🗑️ Xóa</button>
                     </td>
                 </tr>
@@ -441,9 +437,6 @@
             } catch(e) { alert('Lỗi kết nối Backend!'); }
         }
 
-        // ==========================================
-        // MODULE 5: QUẢN LÝ DANH MỤC (CATEGORIES)
-        // ==========================================
         async function fetchCategories() {
             const tbody = document.getElementById('categoryTableBody'); tbody.innerHTML = '<tr><td colspan="4" class="text-center">Đang tải...</td></tr>';
             try {
